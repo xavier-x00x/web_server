@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	phpDownloadURL   = "https://downloads.php.net/~windows/releases/archives/php-8.5.6-nts-Win32-vs17-x64.zip"
+	phpDownloadURL   = "https://downloads.php.net/~windows/releases/archives/php-8.1.10-nts-Win32-vs16-x64.zip"
 	nginxDownloadURL = "https://nginx.org/download/nginx-1.30.0.zip"
-	phpZipName       = "php-8.5.6-nts-Win32-vs17-x64.zip"
+	phpZipName       = "php-8.1.10-nts-Win32-vs16-x64.zip"
 	nginxZipName     = "nginx-1.30.0.zip"
 )
 
@@ -74,13 +74,32 @@ func (d *Downloader) downloadAndExtractPHP() error {
 	tmpZip := filepath.Join(d.cfg.BinDir, phpZipName)
 	defer os.Remove(tmpZip)
 
-	if err := d.downloadFile(phpDownloadURL, tmpZip, "PHP 8.5.6"); err != nil {
+	if err := d.downloadFile(phpDownloadURL, tmpZip, "PHP 8.1.10"); err != nil {
 		return err
 	}
 
 	// PHP zip extracts files directly (no subdirectory)
-	return d.extractZip(tmpZip, phpDir, "")
+	if err := d.extractZip(tmpZip, phpDir, ""); err != nil {
+		return err
+	}
+
+	// Rename php-cgi.exe to the expected binary name if it exists
+	expectedName := filepath.Base(d.cfg.PHPBinaryPath)
+	if expectedName != "php-cgi.exe" {
+		phpCGI := filepath.Join(phpDir, "php-cgi.exe")
+		if fileExists(phpCGI) {
+			targetPath := filepath.Join(phpDir, expectedName)
+			// Remove target if it exists (safety)
+			os.Remove(targetPath)
+			if err := os.Rename(phpCGI, targetPath); err != nil {
+				return fmt.Errorf("failed to rename php-cgi.exe to %s: %w", expectedName, err)
+			}
+		}
+	}
+
+	return nil
 }
+
 
 func (d *Downloader) downloadAndExtractNginx() error {
 	nginxDir := filepath.Dir(d.cfg.NginxBinaryPath)

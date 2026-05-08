@@ -48,6 +48,7 @@ func NewAPI(cfg *config.Config, pm *pool.Manager, nm *nginx.Manager, mon *monito
 type StatusResponse struct {
 	Status        string `json:"status"`
 	Version       string `json:"version"`
+	PHPVersion    string `json:"php_version"`
 	Uptime        string `json:"uptime"`
 	NginxRunning  bool   `json:"nginx_running"`
 	NginxPID      int    `json:"nginx_pid"`
@@ -68,6 +69,7 @@ func (a *API) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	resp := StatusResponse{
 		Status:        "running",
 		Version:       "1.0.0",
+		PHPVersion:    a.poolManager.PHPVersion(),
 		Uptime:        a.monitor.Metrics().Uptime().Round(time.Second).String(),
 		NginxRunning:  a.nginxManager.IsRunning(),
 		NginxPID:      a.nginxManager.PID(),
@@ -78,6 +80,7 @@ func (a *API) HandleStatus(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, resp)
 }
+
 
 // HandleWorkers returns worker information
 func (a *API) HandleWorkers(w http.ResponseWriter, r *http.Request) {

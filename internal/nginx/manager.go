@@ -38,6 +38,24 @@ func (m *Manager) Start() error {
 		return nil
 	}
 
+	// Get nginx directory (needed as prefix)
+	nginxDir := filepath.Dir(m.cfg.NginxBinaryPath)
+
+	// Ensure logs and temp directories exist BEFORE config validation
+	// because nginx -t also needs these directories to exist
+	os.MkdirAll(filepath.Join(nginxDir, "logs"), 0755)
+	tempDirs := []string{
+		"temp",
+		"temp/client_body_temp",
+		"temp/proxy_temp",
+		"temp/fastcgi_temp",
+		"temp/uwsgi_temp",
+		"temp/scgi_temp",
+	}
+	for _, dir := range tempDirs {
+		os.MkdirAll(filepath.Join(nginxDir, dir), 0755)
+	}
+
 	// Ensure the nginx config is generated
 	configGen := NewConfigGenerator(m.cfg)
 	configPath := filepath.Join(m.cfg.ConfigDir, "nginx.conf")
@@ -50,14 +68,6 @@ func (m *Manager) Start() error {
 	if err := m.validateConfig(configPath); err != nil {
 		return fmt.Errorf("nginx config validation failed: %w", err)
 	}
-
-	// Get nginx directory (needed as prefix)
-	nginxDir := filepath.Dir(m.cfg.NginxBinaryPath)
-
-	// Ensure logs directory exists within nginx dir
-	os.MkdirAll(filepath.Join(nginxDir, "logs"), 0755)
-	// Also create a temp directory for nginx
-	os.MkdirAll(filepath.Join(nginxDir, "temp"), 0755)
 
 	absConfigPath, _ := filepath.Abs(configPath)
 

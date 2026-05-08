@@ -68,3 +68,71 @@
 2026/05/08 16:05:39 [notice] 13120#18424: signal process started
 2026/05/08 16:11:48 [notice] 18524#17684: signal process started
 2026/05/08 16:14:20 [notice] 18940#15744: signal process started
+2026/05/08 18:17:08 [emerg] 2600#15544: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:13 [emerg] 14372#17300: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:18 [emerg] 1600#8260: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:23 [emerg] 16480#6540: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:28 [emerg] 7792#1104: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:33 [emerg] 16520#14156: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:38 [emerg] 14384#4188: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:43 [emerg] 10988#16380: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:48 [emerg] 7828#2612: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:53 [emerg] 14092#5208: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:17:58 [emerg] 16236#11432: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:03 [emerg] 11212#2092: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:06 [emerg] 11500#15880: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:12 [emerg] 17536#7080: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:17 [emerg] 17280#18360: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:22 [emerg] 14380#4820: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:27 [emerg] 17868#3912: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:32 [emerg] 18384#4116: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:37 [emerg] 12368#9896: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:42 [emerg] 16560#17160: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:47 [emerg] 8056#15604: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:52 [emerg] 3948#12992: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:18:57 [emerg] 9552#6556: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:02 [emerg] 2308#6832: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:07 [emerg] 4012#14508: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:12 [emerg] 10380#16664: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:17 [emerg] 12112#17760: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:22 [emerg] 4664#16356: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:27 [emerg] 14248#11280: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:32 [emerg] 13712#9864: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:37 [emerg] 18128#14508: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:42 [emerg] 13364#16600: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:47 [emerg] 10132#7360: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:52 [emerg] 16060#11500: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:19:57 [emerg] 8968#8328: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:24 [emerg] 17512#2724: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:29 [emerg] 9664#9168: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:34 [emerg] 15456#15932: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:39 [emerg] 14460#5868: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:44 [emerg] 15300#12176: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:49 [emerg] 10680#16216: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:54 [emerg] 460#776: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:20:59 [emerg] 17784#6720: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:04 [emerg] 7452#14028: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:09 [emerg] 10856#17120: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:14 [emerg] 9172#14156: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:19 [emerg] 3792#17584: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:24 [emerg] 16244#18080: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:29 [emerg] 17784#12896: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:21:34 [emerg] 2968#17612: CreateDirectory() "F:\experimen\web_server\bin\nginx/temp/client_body_temp" failed (3: The system cannot find the path specified)
+2026/05/08 18:23:27 [notice] 15120#13756: signal process started
+2026/05/08 18:25:55 [notice] 17188#6432: signal process started
+2026/05/08 18:26:40 [notice] 5184#2624: signal process started
+2026/05/08 18:27:55 [notice] 19096#19100: signal process started
+2026/05/08 18:31:39 [notice] 17624#5112: signal process started
+2026/05/08 18:42:02 [notice] 15344#19316: signal process started
+2026/05/08 18:43:11 [notice] 19408#13364: signal process started
+2026/05/08 18:47:31 [notice] 19996#19992: signal process started
+2026/05/08 18:49:09 [notice] 18692#6552: signal process started
+2026/05/08 18:51:32 [notice] 19412#13576: signal process started
+2026/05/08 18:55:33 [notice] 19560#19724: signal process started
+2026/05/08 19:03:26 [notice] 14056#18836: signal process started
+2026/05/08 19:17:37 [notice] 5792#460: signal process started
+2026/05/08 19:49:07 [notice] 20164#17972: signal process started
+2026/05/08 19:49:31 [notice] 15612#14260: signal process started
+2026/05/08 19:52:35 [notice] 20256#18364: signal process started
+2026/05/08 19:53:16 [notice] 24264#24276: signal process started
+2026/05/08 19:53:54 [notice] 376#14192: signal process started

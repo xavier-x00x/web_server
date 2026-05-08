@@ -33,11 +33,18 @@ func (g *PHPConfigGenerator) Generate(destPath string) error {
 		relLogPath = filepath.ToSlash(relLogPath)
 	}
 
+	// Resolve absolute path for extensions
+	phpDir := filepath.Dir(g.cfg.PHPBinaryPath)
+	extDir := filepath.ToSlash(filepath.Join(phpDir, "ext"))
+
 	content := fmt.Sprintf(`; GopherStack Enterprise - Generated PHP Configuration
 ; DO NOT EDIT MANUALLY - Changes will be overwritten by the Dashboard
 
 [PHP]
+extension_dir = "%s"
 memory_limit = %dM
+
+
 max_execution_time = 300
 upload_max_filesize = 100M
 post_max_size = 100M
@@ -63,7 +70,8 @@ extension=mbstring
 extension=openssl
 extension=pdo_mysql
 extension=sqlite3
-`, g.cfg.MaxMemoryMB, relLogPath, opcacheStatus)
+extension=pdo_sqlite
+`, extDir, g.cfg.MaxMemoryMB, relLogPath, opcacheStatus)
 
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {

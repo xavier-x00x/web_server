@@ -1,5 +1,5 @@
 {
-  "php_binary_path": "bin/php/7.4.16/gopher-php.exe",
+  "php_binary_path": "bin/php/8.5.6/gopher-php.exe",
   "worker_count": 32,
   "base_port": 9001,
   "max_requests": 1000,

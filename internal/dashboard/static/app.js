@@ -27,7 +27,9 @@ const dom = {
     nginxStatus: document.getElementById('metric-nginx-status'),
     nginxPid: document.getElementById('metric-nginx-pid'),
     nginxPort: document.getElementById('metric-nginx-port-display'),
+    phpVersion: document.getElementById('php-version-display'),
     workersList: document.getElementById('workers-list'),
+
     chart: document.getElementById('metrics-chart'),
     opcacheToggle: document.getElementById('toggle-opcache'),
     memoryLimitInput: document.getElementById('input-memory-limit'),
@@ -226,7 +228,11 @@ function updateStatus(data) {
     dom.nginxPid.textContent = data.nginx_running ? `PID: ${data.nginx_pid}` : 'Not running';
     dom.nginxPort.textContent = `PORT: ${data.nginx_port || '-'}`;
     dom.uptimeDisplay.textContent = data.uptime;
+    if (data.php_version) {
+        dom.phpVersion.textContent = data.php_version;
+    }
 }
+
 
 function updateMetrics(data) {
     // Update cards

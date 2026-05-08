@@ -3,6 +3,8 @@ package pool
 import (
 	"fmt"
 	"log"
+	"os/exec"
+	"strings"
 	"sync"
 
 	"gopherstack/internal/config"
@@ -285,4 +287,22 @@ func (m *Manager) RestartAll() error {
 	}
 	return nil
 }
+
+// PHPVersion returns the PHP version string by executing php-cgi -v
+func (m *Manager) PHPVersion() string {
+	cmd := exec.Command(m.cfg.PHPBinaryPath, "-v")
+	out, err := cmd.Output()
+	if err != nil {
+		return "Unknown"
+	}
+
+	// Example output: PHP 7.4.16 (cgi-fcgi) (built: Mar  2 2021 14:14:13)
+	// We just want the first part or the whole first line
+	lines := strings.Split(string(out), "\n")
+	if len(lines) > 0 {
+		return strings.TrimSpace(lines[0])
+	}
+	return "Unknown"
+}
+
 
