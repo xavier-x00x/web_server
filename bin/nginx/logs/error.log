@@ -1,0 +1,70 @@
+2026/05/08 09:27:04 [emerg] 8392#16264: CreateFile() "c:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf" failed (2: The system cannot find the file specified)
+2026/05/08 09:27:48 [emerg] 10524#1772: CreateFile() "C:\Users\USER\Documents\project\web\exp\web_server\config\mime.types" failed (2: The system cannot find the file specified) in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:12
+2026/05/08 09:27:53 [emerg] 1496#12232: CreateFile() "C:\Users\USER\Documents\project\web\exp\web_server\config\mime.types" failed (2: The system cannot find the file specified) in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:12
+2026/05/08 09:27:58 [emerg] 3220#6636: CreateFile() "C:\Users\USER\Documents\project\web\exp\web_server\config\mime.types" failed (2: The system cannot find the file specified) in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:12
+2026/05/08 09:28:03 [emerg] 8676#15656: CreateFile() "C:\Users\USER\Documents\project\web\exp\web_server\config\mime.types" failed (2: The system cannot find the file specified) in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:12
+2026/05/08 09:28:08 [emerg] 12908#10916: CreateFile() "C:\Users\USER\Documents\project\web\exp\web_server\config\mime.types" failed (2: The system cannot find the file specified) in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:12
+2026/05/08 09:58:22 [notice] 12284#12532: signal process started
+2026/05/08 10:24:02 [notice] 7560#16824: signal process started
+2026/05/08 10:43:00 [notice] 2308#13432: signal process started
+2026/05/08 10:51:43 [notice] 17144#10004: signal process started
+2026/05/08 11:09:51 [notice] 18268#10036: signal process started
+2026/05/08 11:09:59 [notice] 18092#7264: signal process started
+2026/05/08 11:36:05 [notice] 11516#13564: signal process started
+2026/05/08 11:36:40 [notice] 10756#5740: signal process started
+2026/05/08 11:37:51 [notice] 14072#16856: signal process started
+2026/05/08 11:43:58 [notice] 17588#2468: signal process started
+2026/05/08 11:49:09 [notice] 9316#6556: signal process started
+2026/05/08 11:52:50 [notice] 5620#6640: signal process started
+2026/05/08 11:56:30 [notice] 17284#13200: signal process started
+2026/05/08 11:56:42 [emerg] 15968#10672: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:56:47 [emerg] 9500#16536: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:56:52 [emerg] 16560#17844: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:56:57 [emerg] 9052#13084: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:57:02 [emerg] 15684#13580: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:57:07 [emerg] 16508#16464: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:57:12 [emerg] 15056#18168: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:57:17 [emerg] 16976#18132: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 11:57:23 [emerg] 14012#6444: no buffer is defined for access_log "C:/Users/USER/Documents/project/web/exp/web_server/logs/worker_stats.log" in C:\Users\USER\Documents\project\web\exp\web_server\config\nginx.conf:89
+2026/05/08 12:02:37 [notice] 18280#7208: signal process started
+2026/05/08 12:06:57 [notice] 12224#18176: signal process started
+2026/05/08 12:53:23 [notice] 18176#9504: signal process started
+2026/05/08 12:54:51 [notice] 12532#15148: signal process started
+2026/05/08 12:59:13 [notice] 15208#3528: signal process started
+2026/05/08 13:00:15 [notice] 14544#15664: signal process started
+2026/05/08 13:22:15 [notice] 17232#5548: signal process started
+2026/05/08 13:25:27 [notice] 16744#17068: signal process started
+2026/05/08 13:30:55 [notice] 17340#17676: signal process started
+2026/05/08 13:31:21 [notice] 17828#18308: signal process started
+2026/05/08 13:31:24 [notice] 10756#3320: signal process started
+2026/05/08 13:31:38 [notice] 2440#17704: signal process started
+2026/05/08 14:40:15 [notice] 6288#2472: signal process started
+2026/05/08 14:45:08 [notice] 13412#17120: signal process started
+2026/05/08 14:48:13 [notice] 18264#17620: signal process started
+2026/05/08 14:56:51 [notice] 18424#6384: signal process started
+2026/05/08 15:25:06 [notice] 19964#14940: signal process started
+2026/05/08 15:28:44 [notice] 19888#8764: signal process started
+2026/05/08 15:28:49 [notice] 21192#21124: signal process started
+2026/05/08 15:34:19 [notice] 3364#17776: signal process started
+2026/05/08 15:41:45 [notice] 18988#20068: signal process started
+2026/05/08 15:41:47 [notice] 14928#19268: signal process started
+2026/05/08 15:41:48 [notice] 21148#816: signal process started
+2026/05/08 15:41:49 [notice] 20624#19284: signal process started
+2026/05/08 15:41:49 [notice] 2872#18888: signal process started
+2026/05/08 15:41:51 [notice] 17652#3740: signal process started
+2026/05/08 15:41:52 [notice] 19300#12504: signal process started
+2026/05/08 15:41:53 [notice] 13428#14280: signal process started
+2026/05/08 15:41:53 [notice] 21460#9228: signal process started
+2026/05/08 15:41:55 [notice] 18720#11504: signal process started
+2026/05/08 15:41:56 [notice] 10460#20528: signal process started
+2026/05/08 15:41:57 [notice] 17064#14752: signal process started
+2026/05/08 15:41:58 [notice] 20040#10160: signal process started
+2026/05/08 15:41:59 [notice] 19036#14912: signal process started
+2026/05/08 15:42:25 [notice] 10376#19336: signal process started
+2026/05/08 15:44:24 [notice] 14188#14768: signal process started
+2026/05/08 15:45:15 [notice] 12996#15024: signal process started
+2026/05/08 15:54:03 [notice] 15020#14692: signal process started
+2026/05/08 16:05:08 [notice] 3136#20580: signal process started
+2026/05/08 16:05:39 [notice] 13120#18424: signal process started
+2026/05/08 16:11:48 [notice] 18524#17684: signal process started
+2026/05/08 16:14:20 [notice] 18940#15744: signal process started

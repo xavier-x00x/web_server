@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GopherStack Enterprise — Admin Dashboard</title>
+    <meta name="description" content="GopherStack Enterprise Admin Dashboard">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        glassBorder: 'rgba(255, 255, 255, 0.08)',
+                    },
+                    animation: {
+                        'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
+                        'blink': 'blink 1.5s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        'pulse-glow': {
+                            '0%, 100%': { filter: 'drop-shadow(0 0 8px rgba(129,140,248,0.3))' },
+                            '50%': { filter: 'drop-shadow(0 0 16px rgba(129,140,248,0.6))' }
+                        },
+                        'blink': {
+                            '0%, 100%': { opacity: 1 },
+                            '50%': { opacity: 0.4 }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .glass-panel {
+                @apply bg-slate-900/60 backdrop-blur-xl border border-glassBorder rounded-2xl;
+            }
+            .glass-card {
+                @apply bg-slate-800/40 backdrop-blur-md border border-glassBorder rounded-xl hover:bg-slate-800/60 transition-all duration-300;
+            }
+            .btn {
+                @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg;
+            }
+            .btn-primary {
+                @apply bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-400 hover:to-purple-500 shadow-indigo-500/25;
+            }
+            .btn-secondary {
+                @apply bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 shadow-none;
+            }
+            .btn-sm {
+                @apply px-3 py-1 text-xs;
+            }
+        }
+        
+        body {
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.2) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.2) 0, transparent 50%);
+            background-attachment: fixed;
+            color: #f8fafc;
+        }
+        
+        /* Toast animations */
+        @keyframes toast-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toast-out {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        .toast-animate-in { animation: toast-in 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .toast-animate-out { animation: toast-out 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-200 antialiased selection:bg-indigo-500/30">
+
+    <!-- Navbar -->
+    <header class="sticky top-0 z-50 glass-panel rounded-none border-t-0 border-x-0 border-b border-white/10 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="text-3xl animate-pulse-glow">⚡</div>
+            <div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent tracking-tight">GopherStack</h1>
+                <p class="text-[0.65rem] font-bold text-slate-500 uppercase tracking-widest -mt-1">Enterprise Dashboard</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div id="system-status" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs font-medium transition-colors duration-300">
+                <span class="status-dot w-2 h-2 rounded-full bg-amber-500 animate-blink"></span>
+                <span class="status-text text-slate-300">Connecting...</span>
+            </div>
+            <div id="uptime-display" class="font-mono text-xs text-indigo-300 bg-indigo-950/30 border border-indigo-900/50 px-3 py-1.5 rounded-lg shadow-inner">
+                --:--:--
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-[1400px] mx-auto p-6 lg:p-8 space-y-6">
+        
+        <!-- Metrics Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Active Workers -->
+            <div class="glass-card p-5 relative overflow-hidden group">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl shadow-inner flex-shrink-0">
+                        👷
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Workers</p>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <h3 id="metric-active-workers" class="text-3xl font-black text-white tracking-tighter">-</h3>
+                            <span id="metric-total-workers" class="text-sm font-medium text-slate-400">/ - total</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Requests -->
+            <div class="glass-card p-5 relative overflow-hidden group">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl shadow-inner flex-shrink-0">
+                        📨
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Requests</p>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <h3 id="metric-total-requests" class="text-3xl font-black text-white tracking-tighter">-</h3>
+                        </div>
+                        <p id="metric-rps" class="text-xs font-medium text-indigo-400 mt-0.5">- req/s</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory -->
+            <div class="glass-card p-5 relative overflow-hidden group">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl shadow-inner flex-shrink-0">
+                        🧠
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Memory Allocation</p>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <h3 id="metric-memory" class="text-3xl font-black text-white tracking-tighter">-</h3>
+                            <span class="text-sm font-medium text-slate-400">MB</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nginx Status -->
+            <div class="glass-card p-5 relative overflow-hidden group">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-400 to-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl shadow-inner flex-shrink-0">
+                            🌐
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Nginx Status</p>
+                            <h3 id="metric-nginx-status" class="text-xl font-bold text-slate-300 tracking-tight mt-1">-</h3>
+                            <div class="flex items-center gap-2 mt-1">
+                                <p id="metric-nginx-port-display" class="text-[0.65rem] font-mono text-indigo-400 font-bold bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-900/50">PORT: -</p>
+                                <p id="metric-nginx-pid" class="text-[0.65rem] font-medium text-slate-500">PID: -</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-edit-port" class="p-2 rounded-lg bg-slate-800/80 border border-white/5 text-slate-400 hover:text-indigo-400 hover:border-indigo-500/30 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100" title="Change Port">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layout Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Real-time Chart -->
+            <div class="glass-panel overflow-hidden flex flex-col">
+                <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                    <h2 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                        Metrics Overview
+                    </h2>
+                    <div class="flex items-center gap-4 text-xs font-medium text-slate-400 hidden sm:flex">
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.5)]"></span> Requests</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"></span> Workers</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)]"></span> Memory</span>
+                    </div>
+                </div>
+                <div class="p-6 h-[320px] relative w-full flex-1">
+                    <canvas id="metrics-chart" class="absolute inset-0 w-full h-full p-6"></canvas>
+                </div>
+            </div>
+
+            <!-- PHP Configuration -->
+            <div class="glass-panel overflow-hidden flex flex-col">
+                <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                    <h2 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                        PHP Runtime Settings
+                    </h2>
+                </div>
+                <div class="p-6 space-y-6 flex-1 flex flex-col justify-between">
+                    <div class="space-y-4">
+                        <!-- OpCache Toggle -->
+                        <div class="flex items-center justify-between p-4 rounded-xl bg-slate-800/40 border border-white/5">
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-200">OpCache Accelerator</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">Speed up PHP by caching bytecode.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggle-opcache" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                            </label>
+                        </div>
+
+                        <!-- Max Memory -->
+                        <div class="p-4 rounded-xl bg-slate-800/40 border border-white/5">
+                            <div class="flex justify-between mb-2">
+                                <h4 class="text-sm font-bold text-slate-200">Worker Memory Limit</h4>
+                                <span id="memory-limit-value" class="text-xs font-mono text-indigo-400 font-bold">128 MB</span>
+                            </div>
+                            <input type="range" id="input-memory-limit" min="64" max="1024" step="64" value="128" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                            <div class="flex justify-between mt-2 text-[0.65rem] text-slate-500 font-medium">
+                                <span>64 MB</span>
+                                <span>1024 MB</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="btn-apply-php" class="btn btn-primary w-full justify-center py-3">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Apply & Restart Workers
+                    </button>
+                </div>
+            </div>
+
+            <!-- Worker Pool Management -->
+            <div class="glass-panel overflow-hidden flex flex-col lg:col-span-2">
+                <div class="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                    <h2 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        Worker Pool Management
+                    </h2>
+                    <div class="flex gap-2">
+                        <button id="btn-scale-down" class="btn btn-secondary btn-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg> Scale Down
+                        </button>
+                        <button id="btn-scale-up" class="btn btn-primary btn-sm">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Scale Up
+                        </button>
+                    </div>
+                </div>
+                <div id="workers-list" class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto relative">
+                    <div class="col-span-full flex items-center justify-center py-12 text-sm text-slate-500">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Loading workers...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex items-center justify-end gap-3 pt-2">
+            <button id="btn-refresh" class="btn btn-secondary px-5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                Refresh UI
+            </button>
+            <button id="btn-reload-config" class="btn btn-primary px-5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Reload Nginx
+            </button>
+        </div>
+    </main>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-3 pointer-events-none"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
