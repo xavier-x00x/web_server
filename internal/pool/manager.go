@@ -1,11 +1,13 @@
 package pool
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"gopherstack/internal/config"
 )
@@ -35,6 +37,9 @@ func (m *Manager) Start() error {
 	if m.running {
 		return nil
 	}
+
+	// Cleanup any leftover zombie PHP processes from previous runs
+	m.cleanupZombieProcesses()
 
 	log.Printf("[pool] Starting %d PHP workers on ports %d-%d",
 		m.cfg.WorkerCount, m.cfg.BasePort, m.cfg.BasePort+m.cfg.WorkerCount-1)
@@ -178,6 +183,7 @@ func (m *Manager) RestartWorker(id int) error {
 }
 
 // RestartDeadWorkers restarts any workers that have died
+// Uses copy-then-verify pattern to avoid holding lock during slow restart ops
 func (m *Manager) RestartDeadWorkers() int {
 	m.mu.RLock()
 	workers := make([]*Worker, len(m.workers))
@@ -186,14 +192,38 @@ func (m *Manager) RestartDeadWorkers() int {
 
 	restarted := 0
 	for _, w := range workers {
-		if w.Status() == WorkerStatusDead {
-			log.Printf("[pool] Worker %d is dead, restarting...", w.ID)
-			if err := w.Restart(); err != nil {
-				log.Printf("[pool] Failed to restart worker %d: %v", w.ID, err)
-			} else {
-				log.Printf("[pool] Worker %d restarted successfully (PID: %d)", w.ID, w.PID())
-				restarted++
+		if w.Status() != WorkerStatusDead {
+			continue
+		}
+
+		log.Printf("[pool] Worker %d is dead, restarting...", w.ID)
+		restartCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := w.RestartContext(restartCtx)
+		cancel()
+
+		if err != nil {
+			log.Printf("[pool] Failed to restart worker %d: %v", w.ID, err)
+			continue
+		}
+
+		// Verify worker is still managed by this pool (not removed by ScaleDown)
+		m.mu.RLock()
+		stillManaged := false
+		for _, managed := range m.workers {
+			if managed == w {
+				stillManaged = true
+				break
 			}
+		}
+		m.mu.RUnlock()
+
+		if stillManaged {
+			log.Printf("[pool] Worker %d restarted successfully (PID: %d)", w.ID, w.PID())
+			restarted++
+		} else {
+			// Worker was removed during restart — stop the leaked process
+			log.Printf("[pool] Worker %d was removed from pool, stopping leaked process", w.ID)
+			go w.Stop()
 		}
 	}
 	return restarted
@@ -276,11 +306,14 @@ func (m *Manager) SetPHPIni(path string) {
 }
 
 // RestartAll restarts all workers in the pool
+// Uses copy pattern to avoid holding lock during slow restart ops
 func (m *Manager) RestartAll() error {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	workers := make([]*Worker, len(m.workers))
+	copy(workers, m.workers)
+	m.mu.RUnlock()
 
-	for _, w := range m.workers {
+	for _, w := range workers {
 		if err := w.Restart(); err != nil {
 			return err
 		}
@@ -290,7 +323,10 @@ func (m *Manager) RestartAll() error {
 
 // PHPVersion returns the PHP version string by executing php-cgi -v
 func (m *Manager) PHPVersion() string {
-	cmd := exec.Command(m.cfg.PHPBinaryPath, "-v")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, m.cfg.PHPBinaryPath, "-v")
 	out, err := cmd.Output()
 	if err != nil {
 		return "Unknown"

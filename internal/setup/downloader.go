@@ -2,12 +2,16 @@ package setup
 
 import (
 	"archive/zip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopherstack/internal/config"
 )
@@ -120,7 +124,16 @@ func (d *Downloader) downloadAndExtractNginx() error {
 }
 
 func (d *Downloader) downloadFile(url, destPath, name string) error {
-	resp, err := http.Get(url)
+	// HTTP client with 10-minute timeout (large files ~50MB)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
@@ -138,15 +151,19 @@ func (d *Downloader) downloadFile(url, destPath, name string) error {
 
 	total := resp.ContentLength
 	var downloaded int64
+	hasher := sha256.New()
 
 	buf := make([]byte, 32*1024) // 32KB buffer
 	for {
 		n, readErr := resp.Body.Read(buf)
 		if n > 0 {
+			// Write to file
 			_, writeErr := out.Write(buf[:n])
 			if writeErr != nil {
 				return fmt.Errorf("failed to write file: %w", writeErr)
 			}
+			// Feed to SHA256 hash
+			hasher.Write(buf[:n])
 			downloaded += int64(n)
 			d.progress(downloaded, total, name)
 		}
@@ -158,7 +175,14 @@ func (d *Downloader) downloadFile(url, destPath, name string) error {
 		}
 	}
 
-	fmt.Printf("\n[setup] Downloaded %s (%d MB)\n", name, downloaded/(1024*1024))
+	fmt.Printf("\n[setup] Downloaded %s (%d MB) — SHA256: %s\n",
+		name, downloaded/(1024*1024), hex.EncodeToString(hasher.Sum(nil)))
+
+	// TODO: Verify SHA256 checksum against known hashes for integrity
+	// Example: if expectedHash != "" && hex.EncodeToString(hasher.Sum(nil)) != expectedHash {
+	//     return fmt.Errorf("checksum mismatch for %s", name)
+	// }
+
 	return nil
 }
 

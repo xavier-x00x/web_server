@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -46,6 +47,7 @@ type Worker struct {
 
 	mu           sync.RWMutex
 	cmd          *exec.Cmd
+	cancel       context.CancelFunc // for graceful shutdown
 	status       WorkerStatus
 	pid          int
 	requestCount atomic.Int64
@@ -90,7 +92,11 @@ func (w *Worker) Start() error {
 		args = append(args, "-c", w.PHPIniPath)
 	}
 
-	w.cmd = exec.Command(w.PHPBinPath, args...)
+	// Context for lifecycle management — cancel triggers process kill
+	ctx, cancel := context.WithCancel(context.Background())
+	w.cancel = cancel
+
+	w.cmd = exec.CommandContext(ctx, w.PHPBinPath, args...)
 	w.cmd.Env = append(os.Environ(),
 		fmt.Sprintf("PHP_FCGI_MAX_REQUESTS=%d", 0), // We manage recycling ourselves
 		"PHP_FCGI_CHILDREN=0",                      // No child processes, we manage the pool
@@ -105,6 +111,7 @@ func (w *Worker) Start() error {
 	}
 
 	if err := w.cmd.Start(); err != nil {
+		cancel() // clean up context on failure
 		w.status = WorkerStatusDead
 		return fmt.Errorf("failed to start PHP-CGI worker %d on port %d: %w", w.ID, w.Port, err)
 	}
@@ -119,8 +126,16 @@ func (w *Worker) Start() error {
 	return nil
 }
 
-// Stop gracefully stops the PHP-CGI process
+// Stop gracefully stops the PHP-CGI process with two-phase shutdown:
+//  1. Cancel context (sends kill via exec.CommandContext)
+//  2. Wait up to 5s for graceful exit
+//  3. Force TerminateProcess if still alive
 func (w *Worker) Stop() error {
+	return w.StopContext(context.Background())
+}
+
+// StopContext stops the worker with an optional context for timeout control
+func (w *Worker) StopContext(ctx context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -129,25 +144,54 @@ func (w *Worker) Stop() error {
 		return nil
 	}
 
-	// Kill the process
-	err := w.cmd.Process.Kill()
-	if err != nil {
-		// Process might already be dead
-		w.status = WorkerStatusStopped
-		return nil
+	// Phase 1: Cancel context — triggers kill via exec.CommandContext
+	if w.cancel != nil {
+		w.cancel()
 	}
 
-	// Wait for process to exit
-	w.cmd.Wait()
+	// Phase 2: Wait with timeout for process to exit
+	done := make(chan struct{})
+	go func() {
+		w.cmd.Wait()
+		close(done)
+	}()
+
+	// Use caller's context if it has a deadline, otherwise fallback to 5s
+	timeout := 5 * time.Second
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		// Let the caller's context drive the timeout
+		select {
+		case <-done:
+		case <-ctx.Done():
+			_ = w.cmd.Process.Kill()
+			<-done
+		}
+	} else {
+		select {
+		case <-done:
+		case <-time.After(timeout):
+			// Phase 3: Force kill if still alive
+			_ = w.cmd.Process.Kill()
+			<-done // wait for final exit
+		}
+	}
+
 	w.status = WorkerStatusStopped
 	w.cmd = nil
+	w.cancel = nil
+	w.pid = 0
 
 	return nil
 }
 
 // Restart stops and starts the worker
 func (w *Worker) Restart() error {
-	if err := w.Stop(); err != nil {
+	return w.RestartContext(context.Background())
+}
+
+// RestartContext stops and starts the worker with a context timeout
+func (w *Worker) RestartContext(ctx context.Context) error {
+	if err := w.StopContext(ctx); err != nil {
 		return err
 	}
 

@@ -1,1 +1,5 @@
 /www
+*.exe
+*.exe~
+bin/nginx/logs/
+logs/
