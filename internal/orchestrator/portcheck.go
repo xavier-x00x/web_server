@@ -152,3 +152,84 @@ func WaitForPort(port int, timeout time.Duration) bool {
 	}
 	return false
 }
+
+// CheckWorkerConflicts returns which worker ports are in use
+func CheckWorkerConflicts(cfg *config.Config) map[int]bool {
+	conflicts := make(map[int]bool)
+	for i := 0; i < cfg.WorkerCount; i++ {
+		port := cfg.BasePort + i
+		if !isPortAvailable(port) {
+			conflicts[port] = true
+		}
+	}
+	return conflicts
+}
+
+// FindAvailableRange finds the first block of n consecutive free ports
+// starting from startPort. Returns the starting port of the free block.
+// Searches up to 65535 - count.
+func FindAvailableRange(startPort, count int) (int, error) {
+	if startPort < 1024 {
+		startPort = 1024
+	}
+
+	for port := startPort; port < 65535-count; port++ {
+		// Quick check: is the first port available?
+		if !isPortAvailable(port) {
+			continue
+		}
+
+		// Check the full block
+		allFree := true
+		for i := 0; i < count; i++ {
+			if !isPortAvailable(port + i) {
+				allFree = false
+				port += i // Skip ahead to the conflicted port
+				break
+			}
+		}
+
+		if allFree {
+			return port, nil
+		}
+	}
+
+	return 0, fmt.Errorf("could not find %d consecutive free ports above %d", count, startPort)
+}
+
+// ResolveWorkerPortConflicts checks for worker port conflicts and
+// automatically shifts the worker port range to a conflict-free block.
+// Returns true if ports were shifted, false if no conflicts found.
+func ResolveWorkerPortConflicts(cfg *config.Config) bool {
+	conflicts := CheckWorkerConflicts(cfg)
+	if len(conflicts) == 0 {
+		return false // No conflicts, nothing to do
+	}
+
+	log.Printf("[portcheck] ⚠️  %d worker port(s) in use, searching for free range...", len(conflicts))
+
+	// Log which ports are conflicted
+	for port := range conflicts {
+		proc := findProcessOnPort(port)
+		log.Printf("[portcheck]   - Port %d: IN USE by %s", port, proc)
+	}
+
+	// Find a free range starting above the current base
+	newBase, err := FindAvailableRange(cfg.BasePort+cfg.WorkerCount+100, cfg.WorkerCount)
+	if err != nil {
+		// Try wider range
+		newBase, err = FindAvailableRange(10000, cfg.WorkerCount)
+		if err != nil {
+			log.Printf("[portcheck] ❌ Could not find free port range: %v", err)
+			log.Printf("[portcheck] Falling back to original ports — workers may fail to start")
+			return false
+		}
+	}
+
+	log.Printf("[portcheck] ✅ Found free port block: %d-%d (shifted from %d-%d)",
+		newBase, newBase+cfg.WorkerCount-1,
+		cfg.BasePort, cfg.BasePort+cfg.WorkerCount-1)
+
+	cfg.BasePort = newBase
+	return true
+}

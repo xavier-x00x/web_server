@@ -51,6 +51,13 @@ func (o *Orchestrator) Start() error {
 
 	// Step 0: Check port availability before starting anything
 	log.Println("[orchestrator] Checking port availability...")
+
+	// Also check and auto-resolve worker port conflicts (e.g., with Laragon)
+	if ResolveWorkerPortConflicts(o.cfg) {
+		log.Println("[orchestrator] ✅ Workers will use shifted port range")
+	}
+
+	// Standard port check (nginx + dashboard)
 	ports := CheckPorts(o.cfg)
 	hasConflicts := false
 	for _, p := range ports {
@@ -59,7 +66,7 @@ func (o *Orchestrator) Start() error {
 		}
 	}
 	if hasConflicts {
-		log.Println("[orchestrator] ⚠️  Port conflicts detected — will attempt to start anyway")
+		log.Println("[orchestrator] ⚠️  Port conflicts detected on critical ports — will attempt to start anyway")
 		log.Println("[orchestrator] If startup fails, free the ports above or change config")
 	}
 
