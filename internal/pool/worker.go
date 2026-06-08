@@ -53,10 +53,14 @@ type Worker struct {
 	requestCount atomic.Int64
 	startTime    time.Time
 	restartCount int
+
+	waitDone chan struct{} // closed by monitor() after cmd.Wait() — Stop() waits on this instead of calling cmd.Wait() directly
 }
 
 // NewWorker creates a new PHP-CGI worker
 func NewWorker(id, port int, phpBinPath, documentRoot string) *Worker {
+	ch := make(chan struct{})
+	close(ch) // initially "done" — no wait pending until Start() resets it
 	return &Worker{
 		ID:           id,
 		Port:         port,
@@ -64,6 +68,7 @@ func NewWorker(id, port int, phpBinPath, documentRoot string) *Worker {
 		DocumentRoot: documentRoot,
 		PHPIniPath:   filepath.Join(filepath.Dir(phpBinPath), "..", "..", "config", "php.ini"), // Default fallback
 		status:       WorkerStatusStopped,
+		waitDone:     ch,
 	}
 }
 
@@ -119,8 +124,9 @@ func (w *Worker) Start() error {
 	w.pid = w.cmd.Process.Pid
 	w.startTime = time.Now()
 	w.status = WorkerStatusRunning
+	w.waitDone = make(chan struct{}) // fresh channel for this process lifecycle
 
-	// Monitor the process in background
+	// Monitor the process in background — owns cmd.Wait() exclusively
 	go w.monitor()
 
 	return nil
@@ -149,30 +155,31 @@ func (w *Worker) StopContext(ctx context.Context) error {
 		w.cancel()
 	}
 
-	// Phase 2: Wait with timeout for process to exit
-	done := make(chan struct{})
-	go func() {
-		w.cmd.Wait()
-		close(done)
-	}()
-
-	// Use caller's context if it has a deadline, otherwise fallback to 5s
+	// Phase 2: Wait for process to exit via waitDone (monitor() owns cmd.Wait())
 	timeout := 5 * time.Second
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
-		// Let the caller's context drive the timeout
+		// Use caller's context for timeout
 		select {
-		case <-done:
+		case <-w.waitDone:
 		case <-ctx.Done():
 			_ = w.cmd.Process.Kill()
-			<-done
+			<-w.waitDone
 		}
 	} else {
 		select {
-		case <-done:
+		case <-w.waitDone:
 		case <-time.After(timeout):
 			// Phase 3: Force kill if still alive
 			_ = w.cmd.Process.Kill()
-			<-done // wait for final exit
+			<-w.waitDone // wait for final exit via monitor()
+
+			// Phase 4: Kill any child processes that survived
+			// Process.Kill() (TerminateProcess) kills the main process but
+			// not child processes it may have spawned. Use taskkill /T
+			// to kill the entire process tree as a safety net.
+			if w.pid > 0 {
+				_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", w.pid)).Run()
+			}
 		}
 	}
 
@@ -287,14 +294,19 @@ func (w *Worker) Info() WorkerInfo {
 }
 
 // monitor watches the process and marks it dead if it exits unexpectedly
+// OWNS cmd.Wait() — Stop() waits on waitDone channel instead of calling cmd.Wait()
 func (w *Worker) monitor() {
+	defer func() {
+		w.mu.Lock()
+		if w.status == WorkerStatusRunning {
+			w.status = WorkerStatusDead
+		}
+		w.mu.Unlock()
+		close(w.waitDone) // signal Stop() that process has exited
+	}()
+
 	if w.cmd == nil {
 		return
 	}
 	w.cmd.Wait()
-	w.mu.Lock()
-	if w.status == WorkerStatusRunning {
-		w.status = WorkerStatusDead
-	}
-	w.mu.Unlock()
 }

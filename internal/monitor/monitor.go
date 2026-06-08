@@ -21,9 +21,10 @@ type Monitor struct {
 	metrics      *MetricsCollector
 	proxyLn      net.Listener
 
-	mu       sync.RWMutex
-	running  bool
-	stopChan chan struct{}
+	mu               sync.RWMutex
+	running          bool
+	stopChan         chan struct{}
+	zombieCheckCount int // counter for periodic zombie cleanup
 }
 
 // NewMonitor creates a new health monitor
@@ -118,6 +119,14 @@ func (m *Monitor) check() {
 
 	// 4. Collect metrics
 	m.metrics.Collect(m.poolManager, m.nginxManager)
+
+	// 5. Periodic cleanup of orphaned zombie PHP processes
+	// Run every 10 health check cycles (~50s with default 5s interval)
+	m.zombieCheckCount++
+	if m.zombieCheckCount >= 10 {
+		m.zombieCheckCount = 0
+		m.poolManager.CleanupZombieProcesses()
+	}
 }
 
 func (m *Monitor) startStatsProxy() {

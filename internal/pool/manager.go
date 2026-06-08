@@ -39,7 +39,7 @@ func (m *Manager) Start() error {
 	}
 
 	// Cleanup any leftover zombie PHP processes from previous runs
-	m.cleanupZombieProcesses()
+	m.CleanupZombieProcesses()
 
 	log.Printf("[pool] Starting %d PHP workers on ports %d-%d",
 		m.cfg.WorkerCount, m.cfg.BasePort, m.cfg.BasePort+m.cfg.WorkerCount-1)
