@@ -71,11 +71,13 @@ func cleanupAndExit(orch *Orchestrator) {
 	os.Exit(0)
 }
 
-// forceKillRemainingProcesses kills any remaining nginx.exe and php-cgi.exe
-// processes as a safety net in case graceful shutdown didn't catch them all.
-// taskkill /f /IM gopher-php.exe
+// forceKillRemainingProcesses kills any remaining GopherStack processes
+// as a safety net in case graceful shutdown didn't catch them all.
+// Only targets gopher-php.exe (GopherStack's renamed binary) — does NOT
+// touch system php-cgi.exe or nginx.exe to avoid affecting XAMPP or
+// other installations on the same machine.
 func forceKillRemainingProcesses() {
-	processesToKill := []string{"nginx.exe", "gopher-php.exe"}
+	processesToKill := []string{"gopher-php.exe"}
 
 	for _, procName := range processesToKill {
 		// Use taskkill to force-kill by process name
