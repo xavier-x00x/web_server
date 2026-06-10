@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -44,6 +43,8 @@ type Worker struct {
 	PHPBinPath   string
 	DocumentRoot string
 	PHPIniPath   string
+	MaxRequests  int  // Max FastCGI requests before PHP recycles child (PHP_FCGI_MAX_REQUESTS)
+	PHPChildren  int  // Number of PHP child processes per worker (PHP_FCGI_CHILDREN)
 
 	mu           sync.RWMutex
 	cmd          *exec.Cmd
@@ -58,7 +59,7 @@ type Worker struct {
 }
 
 // NewWorker creates a new PHP-CGI worker
-func NewWorker(id, port int, phpBinPath, documentRoot string) *Worker {
+func NewWorker(id, port int, phpBinPath, documentRoot string, maxRequests, phpChildren int) *Worker {
 	ch := make(chan struct{})
 	close(ch) // initially "done" — no wait pending until Start() resets it
 	return &Worker{
@@ -67,6 +68,8 @@ func NewWorker(id, port int, phpBinPath, documentRoot string) *Worker {
 		PHPBinPath:   phpBinPath,
 		DocumentRoot: documentRoot,
 		PHPIniPath:   filepath.Join(filepath.Dir(phpBinPath), "..", "..", "config", "php.ini"), // Default fallback
+		MaxRequests:  maxRequests,
+		PHPChildren:  phpChildren,
 		status:       WorkerStatusStopped,
 		waitDone:     ch,
 	}
@@ -103,17 +106,15 @@ func (w *Worker) Start() error {
 
 	w.cmd = exec.CommandContext(ctx, w.PHPBinPath, args...)
 	w.cmd.Env = append(os.Environ(),
-		fmt.Sprintf("PHP_FCGI_MAX_REQUESTS=%d", 0), // We manage recycling ourselves
-		"PHP_FCGI_CHILDREN=0",                      // No child processes, we manage the pool
+		fmt.Sprintf("PHP_FCGI_MAX_REQUESTS=%d", w.MaxRequests),
+		fmt.Sprintf("PHP_FCGI_CHILDREN=%d", w.PHPChildren),
 	)
 	w.cmd.Dir = w.DocumentRoot
 	w.cmd.Stdout = nil
 	w.cmd.Stderr = nil
 
 	// Set process group so we can kill the entire group
-	w.cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-	}
+	w.cmd.SysProcAttr = newProcessAttr()
 
 	if err := w.cmd.Start(); err != nil {
 		cancel() // clean up context on failure
@@ -143,10 +144,10 @@ func (w *Worker) Stop() error {
 // StopContext stops the worker with an optional context for timeout control
 func (w *Worker) StopContext(ctx context.Context) error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
 
 	if w.cmd == nil || w.cmd.Process == nil {
 		w.status = WorkerStatusStopped
+		w.mu.Unlock()
 		return nil
 	}
 
@@ -154,35 +155,41 @@ func (w *Worker) StopContext(ctx context.Context) error {
 	if w.cancel != nil {
 		w.cancel()
 	}
+	
+	pid := w.pid
+	cmd := w.cmd
+	waitDone := w.waitDone
+	
+	w.mu.Unlock() // Unlock before waiting!
 
 	// Phase 2: Wait for process to exit via waitDone (monitor() owns cmd.Wait())
 	timeout := 5 * time.Second
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
 		// Use caller's context for timeout
 		select {
-		case <-w.waitDone:
+		case <-waitDone:
 		case <-ctx.Done():
-			_ = w.cmd.Process.Kill()
-			<-w.waitDone
+			if pid > 0 {
+				_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", pid)).Run()
+			}
+			_ = cmd.Process.Kill()
+			<-waitDone
 		}
 	} else {
 		select {
-		case <-w.waitDone:
+		case <-waitDone:
 		case <-time.After(timeout):
-			// Phase 3: Force kill if still alive
-			_ = w.cmd.Process.Kill()
-			<-w.waitDone // wait for final exit via monitor()
-
-			// Phase 4: Kill any child processes that survived
-			// Process.Kill() (TerminateProcess) kills the main process but
-			// not child processes it may have spawned. Use taskkill /T
-			// to kill the entire process tree as a safety net.
-			if w.pid > 0 {
-				_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", w.pid)).Run()
+			// Phase 3 & 4: Kill process tree using taskkill
+			if pid > 0 {
+				_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", pid)).Run()
 			}
+			_ = cmd.Process.Kill() // Fallback just in case
+			<-waitDone // wait for final exit via monitor()
 		}
 	}
 
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.status = WorkerStatusStopped
 	w.cmd = nil
 	w.cancel = nil

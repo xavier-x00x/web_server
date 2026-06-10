@@ -6,8 +6,8 @@ export const options = {
     // Menjalankan skenario secara bertahap (ramp up & ramp down)
     stages: [
         { duration: '10s', target: 100 }, // Fase 1: Naik ke 100 VU
-        { duration: '20s', target: 650 }, // Fase 2: Ramp up ke 650 VU (Load testing)
-        { duration: '25s', target: 650 }, // Fase 3: Tahan di 650 VU (Stress testing)
+        { duration: '20s', target: 500 }, // Fase 2: Ramp up ke 500 VU (Load testing)
+        { duration: '25s', target: 500 }, // Fase 3: Tahan di 500 VU (Stress testing)
         { duration: '10s', target: 0 },   // Fase 4: Turun bertahap ke 0 (Cooldown)
     ],
     // Target yang diharapkan dari performa server

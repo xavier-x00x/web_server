@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 
 	"gopherstack/internal/config"
@@ -78,9 +77,7 @@ func (m *Manager) Start() error {
 	m.cmd.Dir = nginxDir
 	m.cmd.Stdout = os.Stdout
 	m.cmd.Stderr = os.Stderr
-	m.cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-	}
+	m.cmd.SysProcAttr = nginxProcessAttr()
 
 	if err := m.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start nginx: %w", err)

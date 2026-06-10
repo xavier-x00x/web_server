@@ -336,6 +336,52 @@ func (a *API) HandleUpdatePHPConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 
+// HandleShutdown stops the PHP and Nginx workers but keeps the orchestrator running
+func (a *API) HandleShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "Stopping PHP and Nginx...",
+	})
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		if a.nginxManager != nil {
+			a.nginxManager.Stop()
+		}
+		if a.poolManager != nil {
+			a.poolManager.Stop()
+		}
+	}()
+}
+
+// HandleStart starts the PHP and Nginx workers
+func (a *API) HandleStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"message": "Starting PHP and Nginx...",
+	})
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		if a.poolManager != nil {
+			a.poolManager.Start()
+		}
+		if a.nginxManager != nil {
+			a.nginxManager.Start()
+		}
+	}()
+}
+
 // HandleWebSocket handles WebSocket connections for real-time metrics
 func (a *API) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Simple SSE (Server-Sent Events) fallback since we want to avoid external deps

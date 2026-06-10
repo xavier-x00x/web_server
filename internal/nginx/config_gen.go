@@ -34,6 +34,7 @@ http {
     tcp_nopush      on;
     tcp_nodelay     on;
     keepalive_timeout 65;
+    keepalive_requests 10000;
     types_hash_max_size 2048;
     client_max_body_size 100m;
 
@@ -44,14 +45,16 @@ http {
     gzip_comp_level 6;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
-    # PHP FastCGI upstream pool (routed via GopherStack Proxy for metrics)
+    # PHP FastCGI upstream pool (direct to worker processes)
     upstream php_pool {
-        server 127.0.0.1:9000;
-        keepalive 64;
+        {{range .Workers}}
+        server 127.0.0.1:{{.Port}} max_fails=3 fail_timeout=5s;
+        {{end}}
+        keepalive 128;
     }
 
     server {
-        listen {{.NginxPort}};
+        listen {{.NginxPort}} backlog=2048;
         server_name localhost;
         root "{{.DocumentRoot}}";
         index index.php index.html index.htm;
@@ -84,13 +87,15 @@ http {
             fastcgi_param SERVER_NAME     $server_name;
             fastcgi_param REDIRECT_STATUS 200;
 
-            fastcgi_connect_timeout 300;
-            fastcgi_send_timeout 300;
-            fastcgi_read_timeout 300;
-            fastcgi_buffer_size 128k;
-            fastcgi_buffers 16 256k;
-            fastcgi_busy_buffers_size 256k;
+            fastcgi_connect_timeout 5;
+            fastcgi_send_timeout 60;
+            fastcgi_read_timeout 60;
+            fastcgi_buffer_size 64k;
+            fastcgi_buffers 8 64k;
+            fastcgi_busy_buffers_size 128k;
             fastcgi_keep_conn on;
+            fastcgi_next_upstream error timeout;
+            fastcgi_next_upstream_tries 3;
         }
 
         # Deny access to hidden files
@@ -108,6 +113,7 @@ http {
     }
 }
 `
+
 
 // WorkerEntry represents a single upstream worker for the template
 type WorkerEntry struct {

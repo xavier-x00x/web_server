@@ -100,14 +100,7 @@ func (m *Monitor) check() {
 		log.Printf("[monitor] Auto-healed %d dead workers", restarted)
 	}
 
-	// 2. Recycle workers that exceeded max requests
-	for _, w := range m.poolManager.Workers() {
-		if w.IsAlive() && w.RequestCount() >= int64(m.cfg.MaxRequests) {
-			m.poolManager.RecycleWorker(w)
-		}
-	}
-
-	// 3. Check Nginx status
+	// 2. Check Nginx status
 	if !m.nginxManager.IsRunning() {
 		log.Println("[monitor] Nginx is not running, attempting restart...")
 		if err := m.nginxManager.Start(); err != nil {
@@ -117,16 +110,10 @@ func (m *Monitor) check() {
 		}
 	}
 
-	// 4. Collect metrics
+	// 3. Collect metrics
 	m.metrics.Collect(m.poolManager, m.nginxManager)
 
-	// 5. Periodic cleanup of orphaned zombie PHP processes
-	// Run every 10 health check cycles (~50s with default 5s interval)
-	m.zombieCheckCount++
-	if m.zombieCheckCount >= 10 {
-		m.zombieCheckCount = 0
-		m.poolManager.CleanupZombieProcesses()
-	}
+	// (Zombie cleanup is now only performed during initial startup in pool manager)
 }
 
 func (m *Monitor) startStatsProxy() {

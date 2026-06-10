@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"gopherstack/internal/monitor"
 	"gopherstack/internal/nginx"
 	"gopherstack/internal/pool"
-	"gopherstack/internal/setup"
 )
 
 // Orchestrator is the main coordinator for all GopherStack components
@@ -70,18 +70,9 @@ func (o *Orchestrator) Start() error {
 		log.Println("[orchestrator] If startup fails, free the ports above or change config")
 	}
 
-	// Step 1: Ensure binaries are downloaded
-	log.Println("[orchestrator] Checking binaries...")
-	downloader := setup.NewDownloader(o.cfg, func(downloaded, total int64, name string) {
-		if total > 0 {
-			pct := float64(downloaded) / float64(total) * 100
-			fmt.Printf("\r[setup] Downloading %s: %.1f%%", name, pct)
-		} else {
-			fmt.Printf("\r[setup] Downloading %s: %d MB", name, downloaded/(1024*1024))
-		}
-	})
-	if err := downloader.EnsureBinaries(); err != nil {
-		return fmt.Errorf("failed to setup binaries: %w", err)
+	// Step 1: Ensure gopher binaries exist (copied from originals)
+	if err := o.ensureGopherBinaries(); err != nil {
+		return fmt.Errorf("failed to ensure gopher binaries: %w", err)
 	}
 
 	// Step 2: Create default PHP files if www directory is empty
@@ -289,3 +280,67 @@ func (o *Orchestrator) ensureDefaultPHPFiles() {
 		log.Println("[orchestrator] Created default index.php")
 	}
 }
+
+func (o *Orchestrator) ensureGopherBinaries() error {
+	log.Println("[orchestrator] Ensuring gopher binaries exist...")
+
+	// For PHP
+	phpPath := o.cfg.PHPBinaryPath
+	if _, err := os.Stat(phpPath); os.IsNotExist(err) {
+		origPath := filepath.Join(filepath.Dir(phpPath), "php-cgi.exe")
+		if _, err := os.Stat(origPath); err == nil {
+			log.Printf("[orchestrator] Copying %s to %s", filepath.Base(origPath), filepath.Base(phpPath))
+			if err := copyFile(origPath, phpPath); err != nil {
+				return fmt.Errorf("failed to copy PHP binary: %w", err)
+			}
+		} else {
+			return fmt.Errorf("neither %s nor %s found", phpPath, origPath)
+		}
+	}
+
+	// For Nginx
+	nginxPath := o.cfg.NginxBinaryPath
+	if _, err := os.Stat(nginxPath); os.IsNotExist(err) {
+		origPath := filepath.Join(filepath.Dir(nginxPath), "nginx.exe")
+		if _, err := os.Stat(origPath); err == nil {
+			log.Printf("[orchestrator] Copying %s to %s", filepath.Base(origPath), filepath.Base(nginxPath))
+			if err := copyFile(origPath, nginxPath); err != nil {
+				return fmt.Errorf("failed to copy Nginx binary: %w", err)
+			}
+		} else {
+			return fmt.Errorf("neither %s nor %s found", nginxPath, origPath)
+		}
+	}
+
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
+
+	if _, err := io.Copy(destination, source); err != nil {
+		return err
+	}
+
+	return os.Chmod(dst, sourceFileStat.Mode())
+}
+

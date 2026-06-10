@@ -11,10 +11,10 @@ if ($gs) {
 }
 
 # Kill Nginx
-$ngx = Get-Process nginx -ErrorAction SilentlyContinue
+$ngx = Get-Process nginx, gopher-nginx -ErrorAction SilentlyContinue
 if ($ngx) {
     Write-Host "Terminating Nginx processes..."
-    Stop-Process -Name nginx -Force
+    Stop-Process -Name nginx, gopher-nginx -Force
 }
 
 # Kill PHP workers

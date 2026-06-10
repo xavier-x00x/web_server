@@ -17,6 +17,7 @@ type Config struct {
 	BasePort      int    `json:"base_port"`       // Starting port for PHP workers (default: 9001)
 	MaxRequests   int    `json:"max_requests"`    // Requests before worker recycle (default: 500)
 	MaxMemoryMB   int    `json:"max_memory_mb"`   // Memory limit per worker in MB (default: 128)
+	PHPChildren   int    `json:"php_children"`    // PHP child processes per worker for internal recycling (default: 4)
 	EnableOpCache bool   `json:"enable_opcache"`  // Toggle PHP OpCache (default: false)
 
 	// Nginx settings
@@ -115,6 +116,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("dashboard_port must be between 1 and 65535, got %d", c.DashboardPort)
 	}
 	// Ensure no port conflicts
+	if c.NginxPort == c.DashboardPort {
+		return fmt.Errorf("nginx port %d conflicts with dashboard port", c.NginxPort)
+	}
 	ports := map[int]string{
 		c.NginxPort:     "nginx",
 		c.DashboardPort: "dashboard",
@@ -190,7 +194,7 @@ func (c *Config) resolvePaths() {
 	}
 
 	if c.NginxBinaryPath == "" {
-		c.NginxBinaryPath = filepath.Join(c.BinDir, "nginx", "nginx.exe")
+		c.NginxBinaryPath = filepath.Join(c.BinDir, "nginx", "gopher-nginx.exe")
 	} else {
 		c.NginxBinaryPath = resolve(c.NginxBinaryPath)
 	}
@@ -212,6 +216,7 @@ func Defaults() *Config {
 		BasePort:            9001,
 		MaxRequests:         500,
 		MaxMemoryMB:         128,
+		PHPChildren:         4,
 		NginxPort:           80,
 		DashboardPort:       8090,
 		DocumentRoot:        "www",

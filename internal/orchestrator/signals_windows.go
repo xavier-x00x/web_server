@@ -1,3 +1,5 @@
+//go:build windows
+
 package orchestrator
 
 import (
@@ -77,7 +79,7 @@ func cleanupAndExit(orch *Orchestrator) {
 // touch system php-cgi.exe or nginx.exe to avoid affecting XAMPP or
 // other installations on the same machine.
 func forceKillRemainingProcesses() {
-	processesToKill := []string{"gopher-php.exe"}
+	processesToKill := []string{"gopher-php.exe", "gopher-nginx.exe"}
 
 	for _, procName := range processesToKill {
 		// Use taskkill to force-kill by process name

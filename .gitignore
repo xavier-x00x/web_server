@@ -1,5 +1,23 @@
-/www
+# GopherStack Enterprise - .gitignore
+
+# Build artifacts
 *.exe
 *.exe~
-bin/nginx/logs/
+
+# Backup files from iterative builds
+*.old
+*.old.*
+
+# Downloaded dependencies
+bin/php/
+bin/nginx/
+*.zip
+
+# Generated runtime configs
+config/nginx.conf
+config/php.ini
+
+# Runtime data
+/www
 logs/
+bin/nginx/logs/

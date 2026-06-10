@@ -136,7 +136,7 @@ func runStatus(cfg *config.Config) {
 }
 
 func printHelp() {
-	fmt.Println(`
+	fmt.Print(`
 ╔══════════════════════════════════════════════════╗
 ║      GopherStack Enterprise v` + version + `              ║
 ║      High-Concurrency PHP Orchestrator           ║

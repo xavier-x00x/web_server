@@ -48,7 +48,7 @@ func (m *Manager) Start() error {
 
 	for i := 0; i < m.cfg.WorkerCount; i++ {
 		port := m.cfg.BasePort + i
-		worker := NewWorker(i, port, m.cfg.PHPBinaryPath, m.cfg.DocumentRoot)
+		worker := NewWorker(i, port, m.cfg.PHPBinaryPath, m.cfg.DocumentRoot, m.cfg.MaxRequests, m.cfg.PHPChildren)
 		if m.phpIniPath != "" {
 			worker.SetPHPIni(m.phpIniPath)
 		}
@@ -248,7 +248,7 @@ func (m *Manager) ScaleUp(count int) error {
 	for i := 0; i < count; i++ {
 		id := currentCount + i
 		port := m.cfg.BasePort + id
-		worker := NewWorker(id, port, m.cfg.PHPBinaryPath, m.cfg.DocumentRoot)
+		worker := NewWorker(id, port, m.cfg.PHPBinaryPath, m.cfg.DocumentRoot, m.cfg.MaxRequests, m.cfg.PHPChildren)
 		if m.phpIniPath != "" {
 			worker.SetPHPIni(m.phpIniPath)
 		}

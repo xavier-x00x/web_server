@@ -53,6 +53,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/config", api.HandleConfig)
 	mux.HandleFunc("/api/settings/nginx_port", api.HandleUpdateNginxPort)
 	mux.HandleFunc("/api/settings/php_config", api.HandleUpdatePHPConfig)
+	mux.HandleFunc("/api/shutdown", api.HandleShutdown)
+	mux.HandleFunc("/api/start", api.HandleStart)
 
 	// WebSocket for real-time metrics
 	mux.HandleFunc("/ws/metrics", api.HandleWebSocket)

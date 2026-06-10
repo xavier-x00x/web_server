@@ -12,7 +12,7 @@ import (
 // touch php-cgi.exe so XAMPP and other PHP installations are unaffected.
 // /T flag ensures child processes of zombies are also killed.
 func (m *Manager) CleanupZombieProcesses() {
-	names := []string{"gopher-php.exe"}
+	names := []string{"gopher-php.exe", "gopher-nginx.exe"}
 	for _, name := range names {
 		cmd := exec.Command("taskkill", "/f", "/im", name, "/t")
 		if out, err := cmd.CombinedOutput(); err == nil {
