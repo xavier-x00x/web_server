@@ -12,20 +12,22 @@ import (
 	"gopherstack/internal/config"
 )
 
-// Manager manages the pool of PHP-CGI workers
+// Manager manages the pool of PHP-CGI workers for a specific site
 type Manager struct {
-	cfg      *config.Config
-	workers  []*Worker
-	balancer *Balancer
-	mu       sync.RWMutex
-	running  bool
+	cfg        *config.Config
+	site       config.SiteConfig
+	workers    []*Worker
+	balancer   *Balancer
+	mu         sync.RWMutex
+	running    bool
 	phpIniPath string
 }
 
-// NewManager creates a new pool manager
-func NewManager(cfg *config.Config) *Manager {
+// NewManager creates a new pool manager for a site
+func NewManager(cfg *config.Config, site config.SiteConfig) *Manager {
 	return &Manager{
-		cfg: cfg,
+		cfg:  cfg,
+		site: site,
 	}
 }
 
@@ -38,27 +40,24 @@ func (m *Manager) Start() error {
 		return nil
 	}
 
-	// Cleanup any leftover zombie PHP processes from previous runs
-	m.CleanupZombieProcesses()
+	log.Printf("[pool-%s] Starting %d PHP workers on ports %d-%d",
+		m.site.Name, m.site.WorkerCount, m.site.BasePort, m.site.BasePort+m.site.WorkerCount-1)
 
-	log.Printf("[pool] Starting %d PHP workers on ports %d-%d",
-		m.cfg.WorkerCount, m.cfg.BasePort, m.cfg.BasePort+m.cfg.WorkerCount-1)
+	m.workers = make([]*Worker, m.site.WorkerCount)
 
-	m.workers = make([]*Worker, m.cfg.WorkerCount)
-
-	for i := 0; i < m.cfg.WorkerCount; i++ {
-		port := m.cfg.BasePort + i
-		worker := NewWorker(i, port, m.cfg.PHPBinaryPath, m.cfg.DocumentRoot, m.cfg.MaxRequests, m.cfg.PHPChildren)
+	for i := 0; i < m.site.WorkerCount; i++ {
+		port := m.site.BasePort + i
+		worker := NewWorker(i, port, m.site.PHPBinaryPath, m.site.DocumentRoot, m.cfg.MaxRequests, m.cfg.PHPChildren)
 		if m.phpIniPath != "" {
 			worker.SetPHPIni(m.phpIniPath)
 		}
 		m.workers[i] = worker
 
 		if err := worker.Start(); err != nil {
-			log.Printf("[pool] Warning: Failed to start worker %d: %v", i, err)
+			log.Printf("[pool-%s] Warning: Failed to start worker %d: %v", m.site.Name, i, err)
 			continue
 		}
-		log.Printf("[pool] Worker %d started on port %d (PID: %d)", i, port, worker.PID())
+		log.Printf("[pool-%s] Worker %d started on port %d (PID: %d)", m.site.Name, i, port, worker.PID())
 	}
 
 	m.balancer = NewBalancer(m.workers)
@@ -71,7 +70,7 @@ func (m *Manager) Start() error {
 		}
 	}
 
-	log.Printf("[pool] Pool started with %d workers", activeCount)
+	log.Printf("[pool-%s] Pool started with %d workers", m.site.Name, activeCount)
 	return nil
 }
 
@@ -84,7 +83,7 @@ func (m *Manager) Stop() error {
 		return nil
 	}
 
-	log.Println("[pool] Stopping all workers...")
+	log.Printf("[pool-%s] Stopping all workers...", m.site.Name)
 
 	var errs []error
 	for _, w := range m.workers {
@@ -94,7 +93,7 @@ func (m *Manager) Stop() error {
 	}
 
 	m.running = false
-	log.Println("[pool] All workers stopped")
+	log.Printf("[pool-%s] All workers stopped", m.site.Name)
 
 	if len(errs) > 0 {
 		return fmt.Errorf("errors stopping workers: %v", errs)
@@ -178,7 +177,7 @@ func (m *Manager) RestartWorker(id int) error {
 		return fmt.Errorf("invalid worker ID: %d", id)
 	}
 
-	log.Printf("[pool] Restarting worker %d", id)
+	log.Printf("[pool-%s] Restarting worker %d", m.site.Name, id)
 	return m.workers[id].Restart()
 }
 
@@ -196,13 +195,13 @@ func (m *Manager) RestartDeadWorkers() int {
 			continue
 		}
 
-		log.Printf("[pool] Worker %d is dead, restarting...", w.ID)
+		log.Printf("[pool-%s] Worker %d is dead, restarting...", m.site.Name, w.ID)
 		restartCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		err := w.RestartContext(restartCtx)
 		cancel()
 
 		if err != nil {
-			log.Printf("[pool] Failed to restart worker %d: %v", w.ID, err)
+			log.Printf("[pool-%s] Failed to restart worker %d: %v", m.site.Name, w.ID, err)
 			continue
 		}
 
@@ -218,11 +217,11 @@ func (m *Manager) RestartDeadWorkers() int {
 		m.mu.RUnlock()
 
 		if stillManaged {
-			log.Printf("[pool] Worker %d restarted successfully (PID: %d)", w.ID, w.PID())
+			log.Printf("[pool-%s] Worker %d restarted successfully (PID: %d)", m.site.Name, w.ID, w.PID())
 			restarted++
 		} else {
 			// Worker was removed during restart — stop the leaked process
-			log.Printf("[pool] Worker %d was removed from pool, stopping leaked process", w.ID)
+			log.Printf("[pool-%s] Worker %d was removed from pool, stopping leaked process", m.site.Name, w.ID)
 			go w.Stop()
 		}
 	}
@@ -232,9 +231,9 @@ func (m *Manager) RestartDeadWorkers() int {
 // RecycleWorker recycles a worker that has exceeded max requests
 func (m *Manager) RecycleWorker(w *Worker) {
 	if w.RequestCount() >= int64(m.cfg.MaxRequests) {
-		log.Printf("[pool] Worker %d reached %d requests, recycling...", w.ID, w.RequestCount())
+		log.Printf("[pool-%s] Worker %d reached %d requests, recycling...", m.site.Name, w.ID, w.RequestCount())
 		if err := w.Restart(); err != nil {
-			log.Printf("[pool] Failed to recycle worker %d: %v", w.ID, err)
+			log.Printf("[pool-%s] Failed to recycle worker %d: %v", m.site.Name, w.ID, err)
 		}
 	}
 }
@@ -247,8 +246,8 @@ func (m *Manager) ScaleUp(count int) error {
 	currentCount := len(m.workers)
 	for i := 0; i < count; i++ {
 		id := currentCount + i
-		port := m.cfg.BasePort + id
-		worker := NewWorker(id, port, m.cfg.PHPBinaryPath, m.cfg.DocumentRoot, m.cfg.MaxRequests, m.cfg.PHPChildren)
+		port := m.site.BasePort + id
+		worker := NewWorker(id, port, m.site.PHPBinaryPath, m.site.DocumentRoot, m.cfg.MaxRequests, m.cfg.PHPChildren)
 		if m.phpIniPath != "" {
 			worker.SetPHPIni(m.phpIniPath)
 		}
@@ -258,11 +257,11 @@ func (m *Manager) ScaleUp(count int) error {
 		}
 
 		m.workers = append(m.workers, worker)
-		log.Printf("[pool] Scaled up: worker %d started on port %d", id, port)
+		log.Printf("[pool-%s] Scaled up: worker %d started on port %d", m.site.Name, id, port)
 	}
 
 	m.balancer = NewBalancer(m.workers)
-	m.cfg.WorkerCount = len(m.workers)
+	m.site.WorkerCount = len(m.workers)
 	return nil
 }
 
@@ -280,11 +279,11 @@ func (m *Manager) ScaleDown(count int) error {
 		worker := m.workers[idx]
 		worker.Stop()
 		m.workers = m.workers[:idx]
-		log.Printf("[pool] Scaled down: worker %d stopped", worker.ID)
+		log.Printf("[pool-%s] Scaled down: worker %d stopped", m.site.Name, worker.ID)
 	}
 
 	m.balancer = NewBalancer(m.workers)
-	m.cfg.WorkerCount = len(m.workers)
+	m.site.WorkerCount = len(m.workers)
 	return nil
 }
 
@@ -326,7 +325,7 @@ func (m *Manager) PHPVersion() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, m.cfg.PHPBinaryPath, "-v")
+	cmd := exec.CommandContext(ctx, m.site.PHPBinaryPath, "-v")
 	out, err := cmd.Output()
 	if err != nil {
 		return "Unknown"
@@ -340,5 +339,3 @@ func (m *Manager) PHPVersion() string {
 	}
 	return "Unknown"
 }
-
-

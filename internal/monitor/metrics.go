@@ -29,7 +29,6 @@ type SystemMetrics struct {
 	TotalWorkers  int       `json:"total_workers"`
 	NginxRunning  bool      `json:"nginx_running"`
 	NginxPID      int       `json:"nginx_pid"`
-	NginxPort     int       `json:"nginx_port"`
 	UptimeSeconds int64     `json:"uptime_seconds"`
 }
 
@@ -51,22 +50,27 @@ func NewMetricsCollector(cfg *config.Config) *MetricsCollector {
 	}
 }
 
-// Collect gathers metrics from the pool and nginx managers
-func (mc *MetricsCollector) Collect(pm *pool.Manager, nm *nginx.Manager) {
+// Collect gathers metrics from all pool managers and the nginx manager
+func (mc *MetricsCollector) Collect(pms map[string]*pool.Manager, nm *nginx.Manager) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Calculate total requests
+	// Calculate total requests and workers across all pools
 	var totalRequests int64
+	var activeWorkers int
+	var totalWorkers int
 
-	// Fallback to internal pool metric
-	for _, w := range pm.Workers() {
-		totalRequests += w.RequestCount()
+	for _, pm := range pms {
+		for _, w := range pm.Workers() {
+			totalRequests += w.RequestCount()
+		}
+		activeWorkers += pm.ActiveWorkerCount()
+		totalWorkers += pm.TotalWorkerCount()
 	}
 
-	// Try fetching accurate request count from Nginx stub_status
-	if nm.IsRunning() {
-		nginxReqs, err := mc.fetchNginxRequests()
+	// Try fetching accurate request count from Nginx stub_status using the first site's port
+	if nm.IsRunning() && len(mc.cfg.Sites) > 0 {
+		nginxReqs, err := mc.fetchNginxRequests(mc.cfg.Sites[0].NginxPort)
 		if err == nil && nginxReqs > totalRequests {
 			totalRequests = nginxReqs
 		}
@@ -79,11 +83,10 @@ func (mc *MetricsCollector) Collect(pm *pool.Manager, nm *nginx.Manager) {
 		MemSysMB:      float64(memStats.Sys) / 1024 / 1024,
 		NumGC:         memStats.NumGC,
 		TotalRequests: totalRequests,
-		ActiveWorkers: pm.ActiveWorkerCount(),
-		TotalWorkers:  pm.TotalWorkerCount(),
+		ActiveWorkers: activeWorkers,
+		TotalWorkers:  totalWorkers,
 		NginxRunning:  nm.IsRunning(),
 		NginxPID:      nm.PID(),
-		NginxPort:     mc.cfg.NginxPort,
 		UptimeSeconds: int64(time.Since(mc.startTime).Seconds()),
 	}
 
@@ -118,9 +121,9 @@ func (mc *MetricsCollector) Uptime() time.Duration {
 	return time.Since(mc.startTime)
 }
 
-func (mc *MetricsCollector) fetchNginxRequests() (int64, error) {
+func (mc *MetricsCollector) fetchNginxRequests(port int) (int64, error) {
 	client := &http.Client{Timeout: 2 * time.Second}
-	url := fmt.Sprintf("http://127.0.0.1:%d/nginx_status", mc.cfg.NginxPort)
+	url := fmt.Sprintf("http://127.0.0.1:%d/nginx_status", port)
 	resp, err := client.Get(url)
 	if err != nil {
 		return 0, err

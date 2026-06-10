@@ -21,17 +21,17 @@ var staticFiles embed.FS
 // Server serves the admin dashboard
 type Server struct {
 	cfg          *config.Config
-	poolManager  *pool.Manager
+	poolManagers map[string]*pool.Manager
 	nginxManager *nginx.Manager
 	monitor      *monitor.Monitor
 	httpServer   *http.Server
 }
 
 // NewServer creates a new dashboard server
-func NewServer(cfg *config.Config, pm *pool.Manager, nm *nginx.Manager, mon *monitor.Monitor) *Server {
+func NewServer(cfg *config.Config, pms map[string]*pool.Manager, nm *nginx.Manager, mon *monitor.Monitor) *Server {
 	return &Server{
 		cfg:          cfg,
-		poolManager:  pm,
+		poolManagers: pms,
 		nginxManager: nm,
 		monitor:      mon,
 	}
@@ -42,7 +42,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	// API endpoints
-	api := NewAPI(s.cfg, s.poolManager, s.nginxManager, s.monitor)
+	api := NewAPI(s.cfg, s.poolManagers, s.nginxManager, s.monitor)
 	mux.HandleFunc("/api/status", api.HandleStatus)
 	mux.HandleFunc("/api/workers", api.HandleWorkers)
 	mux.HandleFunc("/api/workers/scale", api.HandleScale)

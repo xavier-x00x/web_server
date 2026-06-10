@@ -19,7 +19,7 @@ import (
 // API provides REST API endpoints for the dashboard
 type API struct {
 	cfg          *config.Config
-	poolManager  *pool.Manager
+	poolManagers map[string]*pool.Manager
 	nginxManager *nginx.Manager
 	monitor      *monitor.Monitor
 
@@ -29,10 +29,10 @@ type API struct {
 }
 
 // NewAPI creates a new API handler
-func NewAPI(cfg *config.Config, pm *pool.Manager, nm *nginx.Manager, mon *monitor.Monitor) *API {
+func NewAPI(cfg *config.Config, pms map[string]*pool.Manager, nm *nginx.Manager, mon *monitor.Monitor) *API {
 	api := &API{
 		cfg:          cfg,
-		poolManager:  pm,
+		poolManagers: pms,
 		nginxManager: nm,
 		monitor:      mon,
 		wsClients:    make(map[chan []byte]struct{}),
@@ -65,22 +65,43 @@ func (a *API) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metrics := a.monitor.Metrics().Current()
+	
+	// Aggregate from all pools
+	var phpVersion string
+	var totalWorkers, activeWorkers int
+	for _, pm := range a.poolManagers {
+		if phpVersion == "" {
+			phpVersion = pm.PHPVersion()
+		} else if phpVersion != pm.PHPVersion() && phpVersion != "Multi-Version" {
+			phpVersion = "Multi-Version"
+		}
+		totalWorkers += pm.TotalWorkerCount()
+		activeWorkers += pm.ActiveWorkerCount()
+	}
+
+	if phpVersion == "" {
+		phpVersion = "Unknown"
+	}
 
 	resp := StatusResponse{
 		Status:        "running",
 		Version:       "1.0.0",
-		PHPVersion:    a.poolManager.PHPVersion(),
+		PHPVersion:    phpVersion,
 		Uptime:        a.monitor.Metrics().Uptime().Round(time.Second).String(),
 		NginxRunning:  a.nginxManager.IsRunning(),
 		NginxPID:      a.nginxManager.PID(),
-		ActiveWorkers: a.poolManager.ActiveWorkerCount(),
-		TotalWorkers:  a.poolManager.TotalWorkerCount(),
+		ActiveWorkers: activeWorkers,
+		TotalWorkers:  totalWorkers,
 		TotalRequests: metrics.TotalRequests,
 	}
 
 	writeJSON(w, resp)
 }
 
+type UIWorkerInfo struct {
+	pool.WorkerInfo
+	Site string `json:"site"`
+}
 
 // HandleWorkers returns worker information
 func (a *API) HandleWorkers(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +110,18 @@ func (a *API) HandleWorkers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, a.poolManager.WorkerInfos())
+	var allInfos []UIWorkerInfo
+	for siteName, pm := range a.poolManagers {
+		infos := pm.WorkerInfos()
+		for _, info := range infos {
+			allInfos = append(allInfos, UIWorkerInfo{
+				WorkerInfo: info,
+				Site:       siteName,
+			})
+		}
+	}
+
+	writeJSON(w, allInfos)
 }
 
 // ScaleRequest represents a scale up/down request
@@ -98,7 +130,7 @@ type ScaleRequest struct {
 	Count  int    `json:"count"`
 }
 
-// HandleScale scales workers up or down
+// HandleScale scales workers up or down across all pools (simplified)
 func (a *API) HandleScale(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -116,19 +148,20 @@ func (a *API) HandleScale(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var err error
-	switch req.Action {
-	case "up":
-		err = a.poolManager.ScaleUp(req.Count)
-	case "down":
-		err = a.poolManager.ScaleDown(req.Count)
-	default:
-		http.Error(w, "Action must be 'up' or 'down'", http.StatusBadRequest)
-		return
+	var lastErr error
+	activeWorkers := 0
+	for _, pm := range a.poolManagers {
+		switch req.Action {
+		case "up":
+			lastErr = pm.ScaleUp(req.Count)
+		case "down":
+			lastErr = pm.ScaleDown(req.Count)
+		}
+		activeWorkers += pm.ActiveWorkerCount()
 	}
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if lastErr != nil {
+		http.Error(w, lastErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -139,11 +172,11 @@ func (a *API) HandleScale(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, map[string]interface{}{
 		"success":        true,
-		"active_workers": a.poolManager.ActiveWorkerCount(),
+		"active_workers": activeWorkers,
 	})
 }
 
-// HandleRestartWorker restarts a specific worker
+// HandleRestartWorker restarts a specific worker across all pools
 func (a *API) HandleRestartWorker(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -157,9 +190,8 @@ func (a *API) HandleRestartWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.poolManager.RestartWorker(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	for _, pm := range a.poolManagers {
+		_ = pm.RestartWorker(id) // Ignore error since the ID might only be valid for some pools
 	}
 
 	writeJSON(w, map[string]interface{}{
@@ -214,7 +246,7 @@ type UpdatePortRequest struct {
 	Port int `json:"port"`
 }
 
-// HandleUpdateNginxPort changes the Nginx listening port
+// HandleUpdateNginxPort changes the Nginx listening port (for the first site for now)
 func (a *API) HandleUpdateNginxPort(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -237,15 +269,11 @@ func (a *API) HandleUpdateNginxPort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, p := range a.cfg.WorkerPorts() {
-		if req.Port == p {
-			http.Error(w, "Port conflicts with a Worker port", http.StatusBadRequest)
-			return
-		}
+	// Update config for the first site (simplified for UI backward compatibility)
+	if len(a.cfg.Sites) > 0 {
+		a.cfg.Sites[0].NginxPort = req.Port
 	}
-
-	// Update config
-	a.cfg.NginxPort = req.Port
+	
 	if err := a.cfg.Save(""); err != nil {
 		log.Printf("[api] Failed to save config: %v", err)
 	}
@@ -271,18 +299,8 @@ func (a *API) HandleConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	writeJSON(w, map[string]interface{}{
-		"worker_count":    a.cfg.WorkerCount,
-		"base_port":       a.cfg.BasePort,
-		"max_requests":    a.cfg.MaxRequests,
-		"max_memory_mb":   a.cfg.MaxMemoryMB,
-		"nginx_port":      a.cfg.NginxPort,
-		"dashboard_port":  a.cfg.DashboardPort,
-		"document_root":   a.cfg.DocumentRoot,
-		"health_interval": a.cfg.HealthCheckInterval,
-		"enable_opcache":  a.cfg.EnableOpCache,
-	})
+	
+	writeJSON(w, a.cfg)
 }
 
 // PHPConfigRequest represents a request to change PHP settings
@@ -304,7 +322,7 @@ func (a *API) HandleUpdatePHPConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update config
+	// Update global config
 	a.cfg.EnableOpCache = req.EnableOpCache
 	if req.MaxMemoryMB >= 16 {
 		a.cfg.MaxMemoryMB = req.MaxMemoryMB
@@ -314,18 +332,21 @@ func (a *API) HandleUpdatePHPConfig(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[api] Failed to save config: %v", err)
 	}
 
-	// Regenerate php.ini
-	phpGen := pool.NewPHPConfigGenerator(a.cfg)
-	phpIniPath := filepath.Join(a.cfg.ConfigDir, "php.ini")
-	if err := phpGen.Generate(phpIniPath); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to generate php.ini: %v", err), http.StatusInternalServerError)
-		return
+	// Regenerate php.ini for all sites
+	for _, site := range a.cfg.Sites {
+		phpGen := pool.NewPHPConfigGenerator(a.cfg, site)
+		phpIniPath := filepath.Join(a.cfg.ConfigDir, fmt.Sprintf("php_%s.ini", site.Name))
+		if err := phpGen.Generate(phpIniPath); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to generate php.ini: %v", err), http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Restart all workers
-	if err := a.poolManager.RestartAll(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to restart workers: %v", err), http.StatusInternalServerError)
-		return
+	// Restart all workers in all pools
+	for _, pm := range a.poolManagers {
+		if err := pm.RestartAll(); err != nil {
+			log.Printf("[api] Warning: Failed to restart some workers: %v", err)
+		}
 	}
 
 	writeJSON(w, map[string]interface{}{
@@ -353,8 +374,10 @@ func (a *API) HandleShutdown(w http.ResponseWriter, r *http.Request) {
 		if a.nginxManager != nil {
 			a.nginxManager.Stop()
 		}
-		if a.poolManager != nil {
-			a.poolManager.Stop()
+		if a.poolManagers != nil {
+			for _, pm := range a.poolManagers {
+				pm.Stop()
+			}
 		}
 	}()
 }
@@ -373,8 +396,10 @@ func (a *API) HandleStart(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		if a.poolManager != nil {
-			a.poolManager.Start()
+		if a.poolManagers != nil {
+			for _, pm := range a.poolManagers {
+				pm.Start()
+			}
 		}
 		if a.nginxManager != nil {
 			a.nginxManager.Start()

@@ -27,17 +27,23 @@ func CheckPorts(cfg *config.Config) []PortInfo {
 		Port int
 		Name string
 	}{
-		{cfg.NginxPort, "nginx"},
 		{cfg.DashboardPort, "dashboard"},
 	}
 
-	// Add worker ports
-	for i := 0; i < cfg.WorkerCount; i++ {
-		port := cfg.BasePort + i
+	// Add site ports
+	for _, site := range cfg.Sites {
 		ports = append(ports, struct {
 			Port int
 			Name string
-		}{port, fmt.Sprintf("worker_%d", i)})
+		}{site.NginxPort, fmt.Sprintf("nginx_%s", site.Name)})
+
+		for i := 0; i < site.WorkerCount; i++ {
+			port := site.BasePort + i
+			ports = append(ports, struct {
+				Port int
+				Name string
+			}{port, fmt.Sprintf("worker_%s_%d", site.Name, i)})
+		}
 	}
 
 	results := make([]PortInfo, 0, len(ports))
@@ -153,11 +159,10 @@ func WaitForPort(port int, timeout time.Duration) bool {
 	return false
 }
 
-// CheckWorkerConflicts returns which worker ports are in use
-func CheckWorkerConflicts(cfg *config.Config) map[int]bool {
+func checkSiteWorkerConflicts(site config.SiteConfig) map[int]bool {
 	conflicts := make(map[int]bool)
-	for i := 0; i < cfg.WorkerCount; i++ {
-		port := cfg.BasePort + i
+	for i := 0; i < site.WorkerCount; i++ {
+		port := site.BasePort + i
 		if !isPortAvailable(port) {
 			conflicts[port] = true
 		}
@@ -198,38 +203,44 @@ func FindAvailableRange(startPort, count int) (int, error) {
 }
 
 // ResolveWorkerPortConflicts checks for worker port conflicts and
-// automatically shifts the worker port range to a conflict-free block.
+// automatically shifts the worker port range to a conflict-free block for each site.
 // Returns true if ports were shifted, false if no conflicts found.
 func ResolveWorkerPortConflicts(cfg *config.Config) bool {
-	conflicts := CheckWorkerConflicts(cfg)
-	if len(conflicts) == 0 {
-		return false // No conflicts, nothing to do
-	}
+	shiftedAny := false
 
-	log.Printf("[portcheck] ⚠️  %d worker port(s) in use, searching for free range...", len(conflicts))
-
-	// Log which ports are conflicted
-	for port := range conflicts {
-		proc := findProcessOnPort(port)
-		log.Printf("[portcheck]   - Port %d: IN USE by %s", port, proc)
-	}
-
-	// Find a free range starting above the current base
-	newBase, err := FindAvailableRange(cfg.BasePort+cfg.WorkerCount+100, cfg.WorkerCount)
-	if err != nil {
-		// Try wider range
-		newBase, err = FindAvailableRange(10000, cfg.WorkerCount)
-		if err != nil {
-			log.Printf("[portcheck] ❌ Could not find free port range: %v", err)
-			log.Printf("[portcheck] Falling back to original ports — workers may fail to start")
-			return false
+	for i, site := range cfg.Sites {
+		conflicts := checkSiteWorkerConflicts(site)
+		if len(conflicts) == 0 {
+			continue // No conflicts for this site
 		}
+
+		log.Printf("[portcheck] ⚠️  Site %s: %d worker port(s) in use, searching for free range...", site.Name, len(conflicts))
+
+		// Log which ports are conflicted
+		for port := range conflicts {
+			proc := findProcessOnPort(port)
+			log.Printf("[portcheck]   - Site %s Port %d: IN USE by %s", site.Name, port, proc)
+		}
+
+		// Find a free range starting above the current base
+		newBase, err := FindAvailableRange(site.BasePort+site.WorkerCount+100, site.WorkerCount)
+		if err != nil {
+			// Try wider range
+			newBase, err = FindAvailableRange(10000, site.WorkerCount)
+			if err != nil {
+				log.Printf("[portcheck] ❌ Could not find free port range for site %s: %v", site.Name, err)
+				log.Printf("[portcheck] Falling back to original ports — workers may fail to start")
+				continue
+			}
+		}
+
+		log.Printf("[portcheck] ✅ Found free port block for site %s: %d-%d (shifted from %d-%d)",
+			site.Name, newBase, newBase+site.WorkerCount-1,
+			site.BasePort, site.BasePort+site.WorkerCount-1)
+
+		cfg.Sites[i].BasePort = newBase
+		shiftedAny = true
 	}
 
-	log.Printf("[portcheck] ✅ Found free port block: %d-%d (shifted from %d-%d)",
-		newBase, newBase+cfg.WorkerCount-1,
-		cfg.BasePort, cfg.BasePort+cfg.WorkerCount-1)
-
-	cfg.BasePort = newBase
-	return true
+	return shiftedAny
 }

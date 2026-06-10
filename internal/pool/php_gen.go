@@ -10,12 +10,13 @@ import (
 
 // PHPConfigGenerator handles generating optimized php.ini files
 type PHPConfigGenerator struct {
-	cfg *config.Config
+	cfg  *config.Config
+	site config.SiteConfig
 }
 
 // NewPHPConfigGenerator creates a new PHP config generator
-func NewPHPConfigGenerator(cfg *config.Config) *PHPConfigGenerator {
-	return &PHPConfigGenerator{cfg: cfg}
+func NewPHPConfigGenerator(cfg *config.Config, site config.SiteConfig) *PHPConfigGenerator {
+	return &PHPConfigGenerator{cfg: cfg, site: site}
 }
 
 // Generate creates an optimized php.ini file
@@ -26,15 +27,16 @@ func (g *PHPConfigGenerator) Generate(destPath string) error {
 	}
 
 	// Resolve Log path relative to DocumentRoot (where workers run)
-	relLogPath, err := filepath.Rel(g.cfg.DocumentRoot, filepath.Join(g.cfg.LogDir, "php_errors.log"))
+	logFile := fmt.Sprintf("php_errors_%s.log", g.site.Name)
+	relLogPath, err := filepath.Rel(g.site.DocumentRoot, filepath.Join(g.cfg.LogDir, logFile))
 	if err != nil {
-		relLogPath = filepath.ToSlash(filepath.Join(g.cfg.LogDir, "php_errors.log")) // Fallback to absolute
+		relLogPath = filepath.ToSlash(filepath.Join(g.cfg.LogDir, logFile)) // Fallback to absolute
 	} else {
 		relLogPath = filepath.ToSlash(relLogPath)
 	}
 
 	// Resolve absolute path for extensions
-	phpDir := filepath.Dir(g.cfg.PHPBinaryPath)
+	phpDir := filepath.Dir(g.site.PHPBinaryPath)
 	extDir := filepath.ToSlash(filepath.Join(phpDir, "ext"))
 
 	content := fmt.Sprintf(`; GopherStack Enterprise - Generated PHP Configuration

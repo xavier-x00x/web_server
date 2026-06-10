@@ -130,9 +130,10 @@ func runAsService(cfg *config.Config) {
 func runStatus(cfg *config.Config) {
 	fmt.Printf("GopherStack Enterprise v%s\n", version)
 	fmt.Printf("Dashboard: http://localhost:%d\n", cfg.DashboardPort)
-	fmt.Printf("Nginx Port: %d\n", cfg.NginxPort)
-	fmt.Printf("Workers: %d (ports %d-%d)\n", cfg.WorkerCount, cfg.BasePort, cfg.BasePort+cfg.WorkerCount-1)
-	fmt.Printf("Document Root: %s\n", cfg.DocumentRoot)
+	for _, site := range cfg.Sites {
+		fmt.Printf("Site [%s]: Nginx Port: %d | Workers: %d (ports %d-%d) | DocRoot: %s\n",
+			site.Name, site.NginxPort, site.WorkerCount, site.BasePort, site.BasePort+site.WorkerCount-1, site.DocumentRoot)
+	}
 }
 
 func printHelp() {

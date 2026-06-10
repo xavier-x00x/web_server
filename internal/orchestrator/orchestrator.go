@@ -17,7 +17,7 @@ import (
 // Orchestrator is the main coordinator for all GopherStack components
 type Orchestrator struct {
 	cfg          *config.Config
-	poolManager  *pool.Manager
+	poolManagers map[string]*pool.Manager
 	nginxManager *nginx.Manager
 	monitor      *monitor.Monitor
 	dashboard    *dashboard.Server
@@ -27,8 +27,9 @@ type Orchestrator struct {
 // New creates a new Orchestrator
 func New(cfg *config.Config) *Orchestrator {
 	return &Orchestrator{
-		cfg:      cfg,
-		stopChan: make(chan struct{}),
+		cfg:          cfg,
+		poolManagers: make(map[string]*pool.Manager),
+		stopChan:     make(chan struct{}),
 	}
 }
 
@@ -44,8 +45,7 @@ func (o *Orchestrator) Start() error {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	// Ensure directories exist
-	os.MkdirAll(o.cfg.DocumentRoot, 0755)
+	// Ensure global directories exist
 	os.MkdirAll(o.cfg.LogDir, 0755)
 	os.MkdirAll(o.cfg.ConfigDir, 0755)
 
@@ -75,22 +75,32 @@ func (o *Orchestrator) Start() error {
 		return fmt.Errorf("failed to ensure gopher binaries: %w", err)
 	}
 
-	// Step 2: Create default PHP files if www directory is empty
-	o.ensureDefaultPHPFiles()
+	// Step 2: Global Cleanup of Zombie Processes BEFORE starting any pools
+	log.Println("[orchestrator] Cleaning up any zombie processes...")
+	pool.CleanupZombieProcesses(o.cfg)
 
-	// Step 3: Start PHP worker pool
-	log.Println("[orchestrator] Generating PHP configuration...")
-	phpGen := pool.NewPHPConfigGenerator(o.cfg)
-	phpIniPath := filepath.Join(o.cfg.ConfigDir, "php.ini")
-	if err := phpGen.Generate(phpIniPath); err != nil {
-		return fmt.Errorf("failed to generate PHP config: %w", err)
-	}
+	// Step 3: Create default files and start PHP worker pools per site
+	log.Println("[orchestrator] Generating PHP configuration and starting worker pools...")
+	
+	for _, site := range o.cfg.Sites {
+		os.MkdirAll(site.DocumentRoot, 0755)
+		o.ensureDefaultPHPFiles(site)
+		
+		log.Printf("[orchestrator] Starting PHP worker pool for site: %s", site.Name)
+		
+		phpGen := pool.NewPHPConfigGenerator(o.cfg, site)
+		phpIniPath := filepath.Join(o.cfg.ConfigDir, fmt.Sprintf("php_%s.ini", site.Name))
+		if err := phpGen.Generate(phpIniPath); err != nil {
+			return fmt.Errorf("failed to generate PHP config for site %s: %w", site.Name, err)
+		}
 
-	log.Println("[orchestrator] Starting PHP worker pool...")
-	o.poolManager = pool.NewManager(o.cfg)
-	o.poolManager.SetPHPIni(phpIniPath) // Pass the generated ini path
-	if err := o.poolManager.Start(); err != nil {
-		return fmt.Errorf("failed to start PHP pool: %w", err)
+		pm := pool.NewManager(o.cfg, site)
+		pm.SetPHPIni(phpIniPath) // Pass the generated ini path
+		if err := pm.Start(); err != nil {
+			return fmt.Errorf("failed to start PHP pool for site %s: %w", site.Name, err)
+		}
+		
+		o.poolManagers[site.Name] = pm
 	}
 
 	// Step 4: Start Nginx
@@ -103,12 +113,12 @@ func (o *Orchestrator) Start() error {
 
 	// Step 5: Start Monitor
 	log.Println("[orchestrator] Starting health monitor...")
-	o.monitor = monitor.NewMonitor(o.cfg, o.poolManager, o.nginxManager)
+	o.monitor = monitor.NewMonitor(o.cfg, o.poolManagers, o.nginxManager)
 	o.monitor.Start()
 
 	// Step 6: Start Admin Dashboard
 	log.Printf("[orchestrator] Starting admin dashboard on port %d...", o.cfg.DashboardPort)
-	o.dashboard = dashboard.NewServer(o.cfg, o.poolManager, o.nginxManager, o.monitor)
+	o.dashboard = dashboard.NewServer(o.cfg, o.poolManagers, o.nginxManager, o.monitor)
 	go func() {
 		if err := o.dashboard.Start(); err != nil {
 			log.Printf("[orchestrator] Dashboard error: %v", err)
@@ -117,9 +127,16 @@ func (o *Orchestrator) Start() error {
 
 	log.Println("")
 	log.Println("╔══════════════════════════════════════════╗")
-	log.Printf("║  Nginx:       http://localhost:%-10d ║\n", o.cfg.NginxPort)
+	for _, site := range o.cfg.Sites {
+		log.Printf("║  Site [%s] Nginx: http://localhost:%-5d ║\n", site.Name, site.NginxPort)
+	}
 	log.Printf("║  Dashboard:   http://localhost:%-10d ║\n", o.cfg.DashboardPort)
-	log.Printf("║  PHP Workers: %d active                   ║\n", o.poolManager.ActiveWorkerCount())
+	
+	totalActive := 0
+	for _, pm := range o.poolManagers {
+		totalActive += pm.ActiveWorkerCount()
+	}
+	log.Printf("║  PHP Workers: %d active                   ║\n", totalActive)
 	log.Println("╚══════════════════════════════════════════╝")
 	log.Println("")
 	log.Println("[orchestrator] GopherStack is running. Press Ctrl+C to stop.")
@@ -144,8 +161,11 @@ func (o *Orchestrator) Stop() error {
 		o.nginxManager.Stop()
 	}
 
-	if o.poolManager != nil {
-		o.poolManager.Stop()
+	if o.poolManagers != nil {
+		for name, pm := range o.poolManagers {
+			log.Printf("[orchestrator] Stopping pool for site: %s", name)
+			pm.Stop()
+		}
 	}
 
 	log.Println("[orchestrator] GopherStack stopped.")
@@ -166,9 +186,9 @@ func (o *Orchestrator) Signal() {
 	}
 }
 
-// PoolManager returns the pool manager
-func (o *Orchestrator) PoolManager() *pool.Manager {
-	return o.poolManager
+// PoolManagers returns the pool managers
+func (o *Orchestrator) PoolManagers() map[string]*pool.Manager {
+	return o.poolManagers
 }
 
 // NginxManager returns the nginx manager
@@ -176,8 +196,8 @@ func (o *Orchestrator) NginxManager() *nginx.Manager {
 	return o.nginxManager
 }
 
-func (o *Orchestrator) ensureDefaultPHPFiles() {
-	indexPath := fmt.Sprintf("%s/index.php", o.cfg.DocumentRoot)
+func (o *Orchestrator) ensureDefaultPHPFiles(site config.SiteConfig) {
+	indexPath := filepath.Join(site.DocumentRoot, "index.php")
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 		defaultPHP := `<?php
 /**
@@ -190,7 +210,7 @@ func (o *Orchestrator) ensureDefaultPHPFiles() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GopherStack Enterprise</title>
+    <title>GopherStack Enterprise - ` + site.Name + `</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -251,7 +271,7 @@ func (o *Orchestrator) ensureDefaultPHPFiles() {
 </head>
 <body>
     <div class="container">
-        <h1>⚡ GopherStack Enterprise</h1>
+        <h1>⚡ GopherStack - <?= htmlspecialchars("` + site.Name + `") ?></h1>
         <p class="version">High-Concurrency PHP Orchestrator for Windows Server</p>
         <span class="badge">✓ Running</span>
         <div class="info">
@@ -277,24 +297,26 @@ func (o *Orchestrator) ensureDefaultPHPFiles() {
 </html>
 `
 		os.WriteFile(indexPath, []byte(defaultPHP), 0644)
-		log.Println("[orchestrator] Created default index.php")
+		log.Printf("[orchestrator] Created default index.php for site %s", site.Name)
 	}
 }
 
 func (o *Orchestrator) ensureGopherBinaries() error {
 	log.Println("[orchestrator] Ensuring gopher binaries exist...")
 
-	// For PHP
-	phpPath := o.cfg.PHPBinaryPath
-	if _, err := os.Stat(phpPath); os.IsNotExist(err) {
-		origPath := filepath.Join(filepath.Dir(phpPath), "php-cgi.exe")
-		if _, err := os.Stat(origPath); err == nil {
-			log.Printf("[orchestrator] Copying %s to %s", filepath.Base(origPath), filepath.Base(phpPath))
-			if err := copyFile(origPath, phpPath); err != nil {
-				return fmt.Errorf("failed to copy PHP binary: %w", err)
+	// For PHP (each site)
+	for _, site := range o.cfg.Sites {
+		phpPath := site.PHPBinaryPath
+		if _, err := os.Stat(phpPath); os.IsNotExist(err) {
+			origPath := filepath.Join(filepath.Dir(phpPath), "php-cgi.exe")
+			if _, err := os.Stat(origPath); err == nil {
+				log.Printf("[orchestrator] Copying %s to %s for site %s", filepath.Base(origPath), filepath.Base(phpPath), site.Name)
+				if err := copyFile(origPath, phpPath); err != nil {
+					return fmt.Errorf("failed to copy PHP binary for site %s: %w", site.Name, err)
+				}
+			} else {
+				return fmt.Errorf("neither %s nor %s found for site %s", phpPath, origPath, site.Name)
 			}
-		} else {
-			return fmt.Errorf("neither %s nor %s found", phpPath, origPath)
 		}
 	}
 
@@ -343,4 +365,3 @@ func copyFile(src, dst string) error {
 
 	return os.Chmod(dst, sourceFileStat.Mode())
 }
-

@@ -9,23 +9,40 @@ import (
 	"strconv"
 )
 
+// SiteConfig represents a single PHP site environment
+type SiteConfig struct {
+	Name          string `json:"name"`
+	PHPBinaryPath string `json:"php_binary_path"`
+	WorkerCount   int    `json:"worker_count"`
+	BasePort      int    `json:"base_port"`
+	NginxPort     int    `json:"nginx_port"`
+	DocumentRoot  string `json:"document_root"`
+}
+
+// WorkerPorts returns a list of all worker ports for this site
+func (s *SiteConfig) WorkerPorts() []int {
+	ports := make([]int, s.WorkerCount)
+	for i := 0; i < s.WorkerCount; i++ {
+		ports[i] = s.BasePort + i
+	}
+	return ports
+}
+
 // Config holds all GopherStack configuration
 type Config struct {
-	// PHP settings
-	PHPBinaryPath string `json:"php_binary_path"` // Path to php-cgi.exe
-	WorkerCount   int    `json:"worker_count"`    // Number of PHP workers (default: CPU cores * 2)
-	BasePort      int    `json:"base_port"`       // Starting port for PHP workers (default: 9001)
-	MaxRequests   int    `json:"max_requests"`    // Requests before worker recycle (default: 500)
-	MaxMemoryMB   int    `json:"max_memory_mb"`   // Memory limit per worker in MB (default: 128)
-	PHPChildren   int    `json:"php_children"`    // PHP child processes per worker for internal recycling (default: 4)
-	EnableOpCache bool   `json:"enable_opcache"`  // Toggle PHP OpCache (default: false)
+	// Sites configuration
+	Sites []SiteConfig `json:"sites"`
 
-	// Nginx settings
+	// Global PHP settings
+	MaxRequests   int  `json:"max_requests"`    // Requests before worker recycle (default: 500)
+	MaxMemoryMB   int  `json:"max_memory_mb"`   // Memory limit per worker in MB (default: 128)
+	PHPChildren   int  `json:"php_children"`    // PHP child processes per worker (default: 4)
+	EnableOpCache bool `json:"enable_opcache"`  // Toggle PHP OpCache (default: false)
+
+	// Global Nginx settings
 	NginxBinaryPath string `json:"nginx_binary_path"` // Path to nginx.exe
-	NginxPort       int    `json:"nginx_port"`        // Nginx listen port (default: 80)
 
-	// General settings
-	DocumentRoot  string `json:"document_root"`  // PHP document root (default: ./www)
+	// Global General settings
 	DashboardPort int    `json:"dashboard_port"` // Admin dashboard port (default: 8090)
 	LogDir        string `json:"log_dir"`        // Log directory (default: ./logs)
 	ConfigDir     string `json:"config_dir"`     // Config directory (default: ./config)
@@ -97,80 +114,87 @@ func (c *Config) Save(configPath string) error {
 
 // Validate checks that the configuration is valid
 func (c *Config) Validate() error {
-	if c.WorkerCount < 1 {
-		return fmt.Errorf("worker_count must be at least 1, got %d", c.WorkerCount)
+	if len(c.Sites) == 0 {
+		return fmt.Errorf("no sites configured in gopherstack.json")
 	}
-	if c.BasePort < 1024 || c.BasePort > 65535 {
-		return fmt.Errorf("base_port must be between 1024 and 65535, got %d", c.BasePort)
-	}
+
 	if c.MaxRequests < 1 {
 		return fmt.Errorf("max_requests must be at least 1, got %d", c.MaxRequests)
 	}
 	if c.MaxMemoryMB < 16 {
 		return fmt.Errorf("max_memory_mb must be at least 16, got %d", c.MaxMemoryMB)
 	}
-	if c.NginxPort < 1 || c.NginxPort > 65535 {
-		return fmt.Errorf("nginx_port must be between 1 and 65535, got %d", c.NginxPort)
-	}
 	if c.DashboardPort < 1 || c.DashboardPort > 65535 {
 		return fmt.Errorf("dashboard_port must be between 1 and 65535, got %d", c.DashboardPort)
 	}
-	// Ensure no port conflicts
-	if c.NginxPort == c.DashboardPort {
-		return fmt.Errorf("nginx port %d conflicts with dashboard port", c.NginxPort)
-	}
+
 	ports := map[int]string{
-		c.NginxPort:     "nginx",
 		c.DashboardPort: "dashboard",
 	}
-	for i := 0; i < c.WorkerCount; i++ {
-		port := c.BasePort + i
-		if name, exists := ports[port]; exists {
-			return fmt.Errorf("worker port %d conflicts with %s port", port, name)
+
+	for _, site := range c.Sites {
+		if site.Name == "" {
+			return fmt.Errorf("site missing name")
 		}
-		ports[port] = fmt.Sprintf("worker_%d", i)
+		if site.WorkerCount < 1 {
+			return fmt.Errorf("site %s: worker_count must be at least 1, got %d", site.Name, site.WorkerCount)
+		}
+		if site.BasePort < 1024 || site.BasePort > 65535 {
+			return fmt.Errorf("site %s: base_port must be between 1024 and 65535, got %d", site.Name, site.BasePort)
+		}
+		if site.NginxPort < 1 || site.NginxPort > 65535 {
+			return fmt.Errorf("site %s: nginx_port must be between 1 and 65535, got %d", site.Name, site.NginxPort)
+		}
+
+		if name, exists := ports[site.NginxPort]; exists {
+			return fmt.Errorf("site %s: nginx port %d conflicts with %s port", site.Name, site.NginxPort, name)
+		}
+		ports[site.NginxPort] = fmt.Sprintf("nginx_%s", site.Name)
+
+		for i := 0; i < site.WorkerCount; i++ {
+			port := site.BasePort + i
+			if name, exists := ports[port]; exists {
+				return fmt.Errorf("site %s: worker port %d conflicts with %s port", site.Name, port, name)
+			}
+			ports[port] = fmt.Sprintf("worker_%s_%d", site.Name, i)
+		}
 	}
+
 	return nil
 }
 
-// WorkerPorts returns a list of all worker ports
-func (c *Config) WorkerPorts() []int {
-	ports := make([]int, c.WorkerCount)
-	for i := 0; i < c.WorkerCount; i++ {
-		ports[i] = c.BasePort + i
-	}
-	return ports
-}
-
 func (c *Config) applyEnvOverrides() {
-	if v := os.Getenv("GOPHERSTACK_WORKERS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			c.WorkerCount = n
-		}
-	}
-	if v := os.Getenv("GOPHERSTACK_BASE_PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			c.BasePort = n
-		}
-	}
-	if v := os.Getenv("GOPHERSTACK_NGINX_PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			c.NginxPort = n
-		}
-	}
 	if v := os.Getenv("GOPHERSTACK_DASHBOARD_PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.DashboardPort = n
 		}
 	}
-	if v := os.Getenv("GOPHERSTACK_DOCUMENT_ROOT"); v != "" {
-		c.DocumentRoot = v
-	}
-	if v := os.Getenv("GOPHERSTACK_PHP_PATH"); v != "" {
-		c.PHPBinaryPath = v
-	}
 	if v := os.Getenv("GOPHERSTACK_NGINX_PATH"); v != "" {
 		c.NginxBinaryPath = v
+	}
+	// For backward compatibility, apply old env vars to the first site
+	if len(c.Sites) > 0 {
+		if v := os.Getenv("GOPHERSTACK_WORKERS"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				c.Sites[0].WorkerCount = n
+			}
+		}
+		if v := os.Getenv("GOPHERSTACK_BASE_PORT"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				c.Sites[0].BasePort = n
+			}
+		}
+		if v := os.Getenv("GOPHERSTACK_NGINX_PORT"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				c.Sites[0].NginxPort = n
+			}
+		}
+		if v := os.Getenv("GOPHERSTACK_DOCUMENT_ROOT"); v != "" {
+			c.Sites[0].DocumentRoot = v
+		}
+		if v := os.Getenv("GOPHERSTACK_PHP_PATH"); v != "" {
+			c.Sites[0].PHPBinaryPath = v
+		}
 	}
 }
 
@@ -182,21 +206,23 @@ func (c *Config) resolvePaths() {
 		return filepath.Join(c.BaseDir, p)
 	}
 
-	c.DocumentRoot = resolve(c.DocumentRoot)
 	c.LogDir = resolve(c.LogDir)
 	c.ConfigDir = resolve(c.ConfigDir)
 	c.BinDir = resolve(c.BinDir)
-
-	if c.PHPBinaryPath == "" {
-		c.PHPBinaryPath = filepath.Join(c.BinDir, "php", "php-cgi.exe")
-	} else {
-		c.PHPBinaryPath = resolve(c.PHPBinaryPath)
-	}
 
 	if c.NginxBinaryPath == "" {
 		c.NginxBinaryPath = filepath.Join(c.BinDir, "nginx", "gopher-nginx.exe")
 	} else {
 		c.NginxBinaryPath = resolve(c.NginxBinaryPath)
+	}
+
+	for i := range c.Sites {
+		c.Sites[i].DocumentRoot = resolve(c.Sites[i].DocumentRoot)
+		if c.Sites[i].PHPBinaryPath == "" {
+			c.Sites[i].PHPBinaryPath = filepath.Join(c.BinDir, "php", "php-cgi.exe")
+		} else {
+			c.Sites[i].PHPBinaryPath = resolve(c.Sites[i].PHPBinaryPath)
+		}
 	}
 }
 
@@ -211,15 +237,21 @@ func Defaults() *Config {
 		workerCount = 32
 	}
 
+	defaultSite := SiteConfig{
+		Name:          "default",
+		PHPBinaryPath: filepath.Join("bin", "php", "8.1.10", "gopher-php.exe"),
+		WorkerCount:   workerCount,
+		BasePort:      9001,
+		NginxPort:     8088,
+		DocumentRoot:  "www",
+	}
+
 	return &Config{
-		WorkerCount:         workerCount,
-		BasePort:            9001,
+		Sites:               []SiteConfig{defaultSite},
 		MaxRequests:         500,
 		MaxMemoryMB:         128,
 		PHPChildren:         4,
-		NginxPort:           80,
 		DashboardPort:       8090,
-		DocumentRoot:        "www",
 		LogDir:              "logs",
 		ConfigDir:           "config",
 		BinDir:              "bin",

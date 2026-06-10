@@ -17,11 +17,15 @@ export const options = {
     },
 };
 
-const TARGET_URL = 'http://localhost:8088/index.php';
+const TARGET_URLS = [
+    'http://localhost:8088/index.php', // PHP 8.1
+    'http://localhost:8089/index.php'  // PHP 7.4
+];
 
 export default function () {
-    // 1. Melakukan HTTP GET request ke target
-    const res = http.get(TARGET_URL);
+    // 1. Melakukan HTTP GET request ke target acak
+    const url = TARGET_URLS[Math.floor(Math.random() * TARGET_URLS.length)];
+    const res = http.get(url);
 
     // 2. Verifikasi respons
     check(res, {

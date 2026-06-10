@@ -164,26 +164,12 @@
                 </div>
             </div>
 
-            <!-- Nginx Status -->
-            <div class="glass-card p-5 relative overflow-hidden group">
+            <!-- Site Configurations Container -->
+            <div id="sites-container" class="glass-card p-5 relative overflow-hidden group flex flex-col justify-center">
                 <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-400 to-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl shadow-inner flex-shrink-0">
-                            🌐
-                        </div>
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Nginx Status</p>
-                            <h3 id="metric-nginx-status" class="text-xl font-bold text-slate-300 tracking-tight mt-1">-</h3>
-                            <div class="flex items-center gap-2 mt-1">
-                                <p id="metric-nginx-port-display" class="text-[0.65rem] font-mono text-indigo-400 font-bold bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-900/50">PORT: -</p>
-                                <p id="metric-nginx-pid" class="text-[0.65rem] font-medium text-slate-500">PID: -</p>
-                            </div>
-                        </div>
-                    </div>
-                    <button id="btn-edit-port" class="p-2 rounded-lg bg-slate-800/80 border border-white/5 text-slate-400 hover:text-indigo-400 hover:border-indigo-500/30 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100" title="Change Port">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                    </button>
+                <div class="flex items-center gap-4 text-sm text-slate-400 animate-pulse">
+                    <svg class="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Loading Sites...
                 </div>
             </div>
         </div>
@@ -268,8 +254,8 @@
                         </button>
                     </div>
                 </div>
-                <div id="workers-list" class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto relative">
-                    <div class="col-span-full flex items-center justify-center py-12 text-sm text-slate-500">
+                <div id="workers-list-container" class="p-6 space-y-6 max-h-[500px] overflow-y-auto relative">
+                    <div class="flex items-center justify-center py-12 text-sm text-slate-500">
                         <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         Loading workers...
                     </div>

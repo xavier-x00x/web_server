@@ -45,8 +45,9 @@ http {
     gzip_comp_level 6;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
-    # PHP FastCGI upstream pool (direct to worker processes)
-    upstream php_pool {
+    {{range .Sites}}
+    # PHP FastCGI upstream pool for site: {{.Name}}
+    upstream php_pool_{{.Name}} {
         {{range .Workers}}
         server 127.0.0.1:{{.Port}} max_fails=3 fail_timeout=5s;
         {{end}}
@@ -66,7 +67,7 @@ http {
 
         # PHP handling
         location ~ \.php$ {
-            fastcgi_pass php_pool;
+            fastcgi_pass php_pool_{{.Name}};
             fastcgi_index index.php;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
             fastcgi_param QUERY_STRING    $query_string;
@@ -111,21 +112,27 @@ http {
             access_log off;
         }
     }
+    {{end}}
 }
 `
-
 
 // WorkerEntry represents a single upstream worker for the template
 type WorkerEntry struct {
 	Port int
 }
 
-// TemplateData holds all data needed for the Nginx config template
-type TemplateData struct {
-	Workers      []WorkerEntry
+// SiteTemplateData holds data for a specific site
+type SiteTemplateData struct {
+	Name         string
 	NginxPort    int
 	DocumentRoot string
-	LogDir       string
+	Workers      []WorkerEntry
+}
+
+// TemplateData holds all data needed for the Nginx config template
+type TemplateData struct {
+	LogDir string
+	Sites  []SiteTemplateData
 }
 
 // ConfigGenerator generates Nginx configuration files
@@ -151,14 +158,21 @@ func (g *ConfigGenerator) Generate(outputPath string) error {
 
 	// Build template data
 	data := TemplateData{
-		NginxPort:    g.cfg.NginxPort,
-		DocumentRoot: filepath.ToSlash(g.cfg.DocumentRoot),
-		LogDir:       relLogDir,
+		LogDir: relLogDir,
 	}
 
-	// Add worker entries
-	for _, port := range g.cfg.WorkerPorts() {
-		data.Workers = append(data.Workers, WorkerEntry{Port: port})
+	for _, site := range g.cfg.Sites {
+		siteData := SiteTemplateData{
+			Name:         site.Name,
+			NginxPort:    site.NginxPort,
+			DocumentRoot: filepath.ToSlash(site.DocumentRoot),
+		}
+		
+		for _, port := range site.WorkerPorts() {
+			siteData.Workers = append(siteData.Workers, WorkerEntry{Port: port})
+		}
+		
+		data.Sites = append(data.Sites, siteData)
 	}
 
 	// Parse and execute template

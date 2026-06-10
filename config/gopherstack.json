@@ -1,17 +1,30 @@
 {
-  "php_binary_path": "bin/php/8.1.10/gopher-php.exe",
-  "worker_count": 32,
-  "base_port": 9001,
-  "max_requests": 10000,
+  "sites": [
+    {
+      "name": "app_php84",
+      "php_binary_path": "bin/php/8.4.22/gopher-php-8.4.22.exe",
+      "worker_count": 24,
+      "base_port": 9001,
+      "nginx_port": 8088,
+      "document_root": "www"
+    },
+    {
+      "name": "app_php74",
+      "php_binary_path": "bin/php/7.4.16/gopher-php-7.4.16.exe",
+      "worker_count": 24,
+      "base_port": 9100,
+      "nginx_port": 8089,
+      "document_root": "www_74"
+    }
+  ],
+  "max_requests": 20000,
   "max_memory_mb": 128,
   "php_children": 4,
   "enable_opcache": false,
   "nginx_binary_path": "bin/nginx/gopher-nginx.exe",
-  "nginx_port": 8088,
-  "document_root": "www",
   "dashboard_port": 8090,
   "log_dir": "logs",
   "config_dir": "config",
   "bin_dir": "bin",
-  "health_check_interval": 5
+  "health_check_interval": 3
 }

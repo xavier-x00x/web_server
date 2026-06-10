@@ -16,7 +16,7 @@ import (
 // Monitor performs periodic health checks and auto-healing
 type Monitor struct {
 	cfg          *config.Config
-	poolManager  *pool.Manager
+	poolManagers map[string]*pool.Manager
 	nginxManager *nginx.Manager
 	metrics      *MetricsCollector
 	proxyLn      net.Listener
@@ -28,10 +28,10 @@ type Monitor struct {
 }
 
 // NewMonitor creates a new health monitor
-func NewMonitor(cfg *config.Config, pm *pool.Manager, nm *nginx.Manager) *Monitor {
+func NewMonitor(cfg *config.Config, pms map[string]*pool.Manager, nm *nginx.Manager) *Monitor {
 	return &Monitor{
 		cfg:          cfg,
-		poolManager:  pm,
+		poolManagers: pms,
 		nginxManager: nm,
 		metrics:      NewMetricsCollector(cfg),
 		stopChan:     make(chan struct{}),
@@ -94,10 +94,15 @@ func (m *Monitor) runLoop(interval time.Duration) {
 }
 
 func (m *Monitor) check() {
-	// 1. Check and restart dead PHP workers
-	restarted := m.poolManager.RestartDeadWorkers()
-	if restarted > 0 {
-		log.Printf("[monitor] Auto-healed %d dead workers", restarted)
+	// 1. Check and restart dead PHP workers across all pools
+	totalRestarted := 0
+	for _, pm := range m.poolManagers {
+		restarted := pm.RestartDeadWorkers()
+		totalRestarted += restarted
+	}
+
+	if totalRestarted > 0 {
+		log.Printf("[monitor] Auto-healed %d dead workers across all sites", totalRestarted)
 	}
 
 	// 2. Check Nginx status
@@ -111,9 +116,7 @@ func (m *Monitor) check() {
 	}
 
 	// 3. Collect metrics
-	m.metrics.Collect(m.poolManager, m.nginxManager)
-
-	// (Zombie cleanup is now only performed during initial startup in pool manager)
+	m.metrics.Collect(m.poolManagers, m.nginxManager)
 }
 
 func (m *Monitor) startStatsProxy() {
@@ -145,8 +148,19 @@ func (m *Monitor) startStatsProxy() {
 func (m *Monitor) handleProxyConn(in net.Conn) {
 	defer in.Close()
 
-	// 1. Pick a worker
-	worker := m.poolManager.NextWorker()
+	// 1. Pick a worker from the first available pool manager
+	var pm *pool.Manager
+	for _, p := range m.poolManagers {
+		pm = p
+		break
+	}
+
+	if pm == nil {
+		log.Printf("[monitor] Proxy Error: No pool managers available")
+		return
+	}
+
+	worker := pm.NextWorker()
 	if worker == nil {
 		log.Printf("[monitor] Proxy Error: No workers available")
 		return
